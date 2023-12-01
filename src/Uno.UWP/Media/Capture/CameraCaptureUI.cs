@@ -21,6 +21,7 @@ namespace Windows.Media.Capture
 
 		public CameraCaptureUI()
 		{
+			VideoSettings.Format = CameraCaptureUIVideoFormat.Mp4;
 		}
 
 		public global::Windows.Foundation.IAsyncOperation<global::Windows.Storage.StorageFile> CaptureFileAsync(global::Windows.Media.Capture.CameraCaptureUIMode mode)
@@ -31,7 +32,7 @@ namespace Windows.Media.Capture
 #if __ANDROID__ || __IOS__
 		private static async Task<StorageFile> CreateTempImage(Stream source, string extension)
 		{
-			var filePath = Path.Combine(Windows.Storage.ApplicationData.Current.TemporaryFolder.Path, Guid.NewGuid() + extension);
+			var filePath = Path.Combine(ApplicationData.Current.TemporaryFolder.Path, Guid.NewGuid() + extension);
 
 			using (var file = File.OpenWrite(filePath))
 			{

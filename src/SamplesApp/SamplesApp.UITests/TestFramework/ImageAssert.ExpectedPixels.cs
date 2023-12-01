@@ -7,7 +7,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using Uno.UITest;
 
-#if HAS_UNO || NETFX_CORE
+#if IS_RUNTIME_UI_TESTS
 using Windows.UI;
 
 using Rectangle = System.Drawing.Rectangle;
@@ -18,7 +18,7 @@ using _Bitmap = Uno.UI.RuntimeTests.Helpers.RawBitmap;
 namespace Uno.UI.RuntimeTests.Helpers;
 #else
 using System.Drawing;
-using _Bitmap = System.Drawing.Bitmap;
+using _Bitmap = SamplesApp.UITests.PlatformBitmap;
 using SamplesApp.UITests._Utils;
 namespace SamplesApp.UITests.TestFramework;
 #endif
@@ -120,11 +120,11 @@ public record struct ExpectedPixels
 	public ExpectedPixels WithTolerance(PixelTolerance tolerance)
 		=> this with { Tolerance = tolerance };
 
-	public ExpectedPixels WithColorTolerance(byte tolerance)
-		=> this with { Tolerance = Tolerance.WithColor(tolerance) };
+	public ExpectedPixels WithColorTolerance(byte tolerance, ColorToleranceKind kind = default)
+		=> this with { Tolerance = Tolerance.WithColor(tolerance, kind) };
 
-	public ExpectedPixels WithPixelTolerance(int x = 0, int y = 0)
-		=> this with { Tolerance = Tolerance.WithOffset(x, y) };
+	public ExpectedPixels WithPixelTolerance(int x = 0, int y = 0, LocationToleranceKind kind = default)
+		=> this with { Tolerance = Tolerance.WithOffset(x, y, kind) };
 
 	public ExpectedPixels Or(ExpectedPixels alternative)
 		=> this with
@@ -190,12 +190,23 @@ public record struct ExpectedPixels
 
 	private static Color GetColorFromString(string colorCode) =>
 		string.IsNullOrWhiteSpace(colorCode)
-#if HAS_UNO || NETFX_CORE
+#if IS_RUNTIME_UI_TESTS
 			? Colors.Transparent
 			: (Color)XamlBindingHelper.ConvertValue(typeof(Color), colorCode);
 #else
 			? Color.Empty
 			: ColorCodeParser.Parse(colorCode);
+#endif
+}
+
+static class ColorExtensions
+{
+#if IS_RUNTIME_UI_TESTS
+	public static Color ToColor(this Color color)
+		=> color;
+#else
+	public static System.Drawing.Color ToColor(this SkiaSharp.SKColor color)
+		=> System.Drawing.Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
 #endif
 }
 

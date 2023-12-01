@@ -15,19 +15,19 @@ public partial struct CornerRadius : IEquatable<CornerRadius>
 {
 	/// <summary>Gets or sets the radius of the top-left corner.</summary>
 	/// <returns>The radius of the top-left corner. The default is 0.</returns>
-	public double TopLeft { get; set; }
+	public double TopLeft;
 
 	/// <summary>Gets or sets the radius of the top-right corner. </summary>
 	/// <returns>The radius of the top-right corner. The default is 0.</returns>
-	public double TopRight { get; set; }
+	public double TopRight;
 
 	/// <summary>Gets or sets the radius of the bottom-right corner. </summary>
 	/// <returns>The radius of the bottom-right corner. The default is 0.</returns>
-	public double BottomRight { get; set; }
+	public double BottomRight;
 
 	/// <summary>Gets or sets the radius of the bottom-left corner. </summary>
 	/// <returns>The radius of the bottom-left corner. The default is 0.</returns>
-	public double BottomLeft { get; set; }
+	public double BottomLeft;
 
 	public CornerRadius(double uniformRadius) : this()
 	{
@@ -114,6 +114,7 @@ public partial struct CornerRadius : IEquatable<CornerRadius>
 	/// <summary>
 	/// Retrieves the non-uniform radii for a border.
 	/// </summary>
+	/// <param name="elementSize">Element size.</param>
 	/// <param name="borderThickness">Border thickness.</param>
 	/// <param name="outer">True to return outer corner radii, false for inner.</param>
 	/// <returns>Radii.</returns>

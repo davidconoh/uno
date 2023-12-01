@@ -1,3 +1,7 @@
+---
+uid: Uno.Contributing.ThemeResource
+---
+
 # Theme resource internals for contributors
 
 This article looks at the way theme resources are handled under the hood, including the way that resource assignations are resolved, and the way that assigned resources are updated, for example when the active theme changes in the running application (from light to dark or vice versa). It's aimed at Uno Platform contributors looking to better understand the internals of the feature.
@@ -73,7 +77,7 @@ Resource bindings are managed by `DependencyObjectStore`. It checks if any prope
 
 If so, for each binding, it tries to re-resolve the correct theme value from the ResourceDictionaries currently in its scope. If it can, it will then set the value, with the correct precedence as captured when the binding was created.
 
-The `DependencyObjectStore` will also propagate the resource binding update to any 'logical children' that are also DependencyObjects, but not FrameworkElements. (Child FrameworkElements will be updated during the traversal of the visual tree.) For performance reasons, the `DependencyObjectStore` does not explicitly maintain a list of logical children. Instead, the `GetChildrenDependencyObjects()` method looks at all current property values and pushes the update to those that are either DependencyObjects or collections of DependencyObjects. In case this is inadequate, it also tries to cast to the `IAdditionalChildrenProvider` internal interface, which allows a type to explicitly specify its logical child dependency objects.
+The `DependencyObjectStore` will also propagate the resource binding update to any 'logical children' that are also DependencyObjects, but not FrameworkElements. (Child FrameworkElements will be updated during the traversal of the visual tree.) For performance reasons, the `DependencyObjectStore` does not explicitly maintain a list of logical children. Instead, the `InnerUpdateChildResourceBindings()` method looks at all current property values and pushes the update to those that are either DependencyObjects or collections of DependencyObjects. In case this is inadequate, it also tries to cast to the `IAdditionalChildrenProvider` internal interface, which allows a type to explicitly specify its logical child dependency objects.
 
 #### Update other FrameworkElement properties
 

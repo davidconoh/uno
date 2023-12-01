@@ -12,6 +12,7 @@ using Uno.UI.DataBinding;
 using System;
 using Uno.UI;
 using System.Collections;
+using System.Diagnostics;
 using Windows.UI.Xaml.Markup;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Text;
@@ -22,26 +23,36 @@ using Windows.UI.Xaml.Automation.Peers;
 using Uno;
 using Uno.Foundation.Logging;
 
+using RadialGradientBrush = Microsoft.UI.Xaml.Media.RadialGradientBrush;
+using Uno.UI.Helpers;
 
-#if XAMARIN_IOS
+#if __IOS__
 using UIKit;
 #endif
 
 namespace Windows.UI.Xaml.Controls
 {
-	[ContentProperty(Name = "Text")]
+	[ContentProperty(Name = nameof(Inlines))]
 	public partial class TextBlock : DependencyObject
 	{
 		private InlineCollection _inlines;
 		private string _inlinesText; // Text derived from the content of Inlines
-		private readonly SerialDisposable _foregroundChanged = new SerialDisposable();
 
+#if !__WASM__
+		private Hyperlink _hyperlinkOver;
+#endif
+
+		private Action _foregroundChanged;
+
+		private Run _reusableRun;
 		private bool _skipInlinesChangedTextSetter;
 
 #if !UNO_REFERENCE_API
 		public TextBlock()
 		{
 			IFrameworkElementHelper.Initialize(this);
+			SetDefaultForeground(ForegroundProperty);
+
 			InitializeProperties();
 
 			InitializePartial();
@@ -209,7 +220,7 @@ namespace Windows.UI.Xaml.Controls
 		#region Text Dependency Property
 
 		public
-#if XAMARIN_IOS
+#if __IOS__
 			new
 #endif
 			string Text
@@ -231,7 +242,7 @@ namespace Windows.UI.Xaml.Controls
 				)
 			);
 
-		internal static object CoerceText(DependencyObject dependencyObject, object baseValue) =>
+		internal static object CoerceText(DependencyObject dependencyObject, object baseValue, DependencyPropertyValuePrecedences _) =>
 			baseValue is string
 				? baseValue
 				: string.Empty;
@@ -250,7 +261,7 @@ namespace Windows.UI.Xaml.Controls
 
 		#region FontFamily Dependency Property
 
-#if XAMARIN_IOS
+#if __IOS__
 		/// <summary>
 		/// Supported font families: http://iosfonts.com/
 		/// </summary>
@@ -374,7 +385,7 @@ namespace Windows.UI.Xaml.Controls
 		#region Foreground Dependency Property
 
 		public
-#if __ANDROID_23__
+#if __ANDROID__
 		new
 #endif
 			Brush Foreground
@@ -383,7 +394,7 @@ namespace Windows.UI.Xaml.Controls
 			set
 			{
 #if !__WASM__
-				if (value is SolidColorBrush || value is GradientBrush || value is null)
+				if (value is SolidColorBrush || value is GradientBrush || value is RadialGradientBrush || value is null)
 				{
 					SetValue(ForegroundProperty, value);
 				}
@@ -405,47 +416,37 @@ namespace Windows.UI.Xaml.Controls
 				new FrameworkPropertyMetadata(
 					defaultValue: SolidColorBrushHelper.Black,
 					options: FrameworkPropertyMetadataOptions.Inherits,
-					propertyChangedCallback: (s, e) => ((TextBlock)s).OnForegroundChanged()
+					propertyChangedCallback: (s, e) => ((TextBlock)s).Subscribe((Brush)e.OldValue, (Brush)e.NewValue)
 				)
 			);
 
+		private void Subscribe(Brush oldValue, Brush newValue)
+		{
+			var newOnInvalidateRender = _foregroundChanged ?? (() => OnForegroundChanged());
+			Brush.SetupBrushChanged(oldValue, newValue, ref _foregroundChanged, newOnInvalidateRender);
+		}
+
 		private void OnForegroundChanged()
 		{
-			void refreshForeground()
+			// The try-catch here is primarily for the benefit of Android. This callback is raised when (say) the brush color changes,
+			// which may happen when the system theme changes from light to dark. For app-level resources, a large number of views may
+			// be subscribed to changes on the brush, including potentially some that have been removed from the visual tree, collected
+			// on the native side, but not yet collected on the managed side (for Xamarin targets).
+
+			// On Android, in practice this could result in ObjectDisposedExceptions when calling RequestLayout(). The try/catch is to
+			// ensure that callbacks are correctly raised for remaining views referencing the brush which *are* still live in the visual tree.
+			try
 			{
-				// The try-catch here is primarily for the benefit of Android. This callback is raised when (say) the brush color changes,
-				// which may happen when the system theme changes from light to dark. For app-level resources, a large number of views may
-				// be subscribed to changes on the brush, including potentially some that have been removed from the visual tree, collected
-				// on the native side, but not yet collected on the managed side (for Xamarin targets).
-
-				// On Android, in practice this could result in ObjectDisposedExceptions when calling RequestLayout(). The try/catch is to
-				// ensure that callbacks are correctly raised for remaining views referencing the brush which *are* still live in the visual tree.
-#if !HAS_EXPENSIVE_TRYFINALLY
-				try
-#endif
-				{
-					OnForegroundChangedPartial();
-					InvalidateTextBlock();
-				}
-#if !HAS_EXPENSIVE_TRYFINALLY
-				catch (Exception e)
-				{
-					if (this.Log().IsEnabled(LogLevel.Debug))
-					{
-						this.Log().LogDebug($"Failed to invalidate for brush changed: {e}");
-					}
-				}
-#endif
+				OnForegroundChangedPartial();
+				InvalidateTextBlock();
 			}
-
-			_foregroundChanged.Disposable = null;
-
-			if (Foreground?.SupportsAssignAndObserveBrush ?? false)
+			catch (Exception e)
 			{
-				_foregroundChanged.Disposable = Brush.AssignAndObserveBrush(Foreground, c => refreshForeground(), refreshForeground);
+				if (this.Log().IsEnabled(LogLevel.Debug))
+				{
+					this.Log().LogDebug($"Failed to invalidate for brush changed: {e}");
+				}
 			}
-
-			refreshForeground();
 		}
 
 		partial void OnForegroundChangedPartial();
@@ -455,7 +456,7 @@ namespace Windows.UI.Xaml.Controls
 		#region IsTextSelectionEnabled Dependency Property
 
 #if !__WASM__
-		[NotImplemented("__ANDROID__", "__IOS__", "NET461", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
+		[NotImplemented("__ANDROID__", "__IOS__", "IS_UNIT_TESTS", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
 #endif
 		public bool IsTextSelectionEnabled
 		{
@@ -464,7 +465,7 @@ namespace Windows.UI.Xaml.Controls
 		}
 
 #if !__WASM__
-		[NotImplemented("__ANDROID__", "__IOS__", "NET461", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
+		[NotImplemented("__ANDROID__", "__IOS__", "IS_UNIT_TESTS", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
 #endif
 		public static DependencyProperty IsTextSelectionEnabledProperty { get; } =
 			DependencyProperty.Register(
@@ -651,8 +652,8 @@ namespace Windows.UI.Xaml.Controls
 
 		public static DependencyProperty TextDecorationsProperty { get; } =
 			DependencyProperty.Register(
-				"TextDecorations",
-				typeof(uint),
+				nameof(TextDecorations),
+				typeof(TextDecorations),
 				typeof(TextBlock),
 				new FrameworkPropertyMetadata(
 					defaultValue: TextDecorations.None,
@@ -728,10 +729,24 @@ namespace Windows.UI.Xaml.Controls
 			{
 				// Inlines must be updated
 				_skipInlinesChangedTextSetter = true;
-				Inlines.Clear();
-				ClearTextPartial();
-				_skipInlinesChangedTextSetter = true;
-				Inlines.Add(new Run { Text = text });
+
+				if (Inlines.Count == 1 && Inlines[0] is Run run)
+				{
+					run.Text = text;
+				}
+				else
+				{
+					if (Inlines.Count > 0)
+					{
+						Inlines.Clear();
+						ClearTextPartial();
+					}
+
+					(_reusableRun ??= new Run()).Text = text;
+
+					Inlines.Add(_reusableRun);
+				}
+
 				_skipInlinesChangedTextSetter = false;
 			}
 		}
@@ -792,7 +807,7 @@ namespace Windows.UI.Xaml.Controls
 #else
 		private static readonly PointerEventHandler OnPointerPressed = (object sender, PointerRoutedEventArgs e) =>
 		{
-			if (!(sender is TextBlock that) || !that.HasHyperlink)
+			if (sender is not TextBlock { HasHyperlink: true } that)
 			{
 				return;
 			}
@@ -852,13 +867,67 @@ namespace Windows.UI.Xaml.Controls
 			}
 		};
 
+		private static readonly PointerEventHandler OnPointerMoved = (sender, e) =>
+		{
+			if (sender is not TextBlock { HasHyperlink: true } that)
+			{
+				return;
+			}
+
+			var point = e.GetCurrentPoint(that);
+
+			var hyperlink = that.FindHyperlinkAt(point.Position);
+			if (that._hyperlinkOver != hyperlink)
+			{
+				that._hyperlinkOver?.ReleasePointerOver(e.Pointer);
+				that._hyperlinkOver = hyperlink;
+				hyperlink?.SetPointerOver(e.Pointer);
+			}
+		};
+
+		private static readonly PointerEventHandler OnPointerEntered = (sender, e) =>
+		{
+			if (sender is not TextBlock { HasHyperlink: true } that)
+			{
+				return;
+			}
+
+			// This assertion fails because we don't release pointer captures on PointerExited in InputManager
+			// TODO: make it such that this assertion doesn't fail
+			// global::System.Diagnostics.Debug.Assert(that._hyperlinkOver == null);
+
+			var point = e.GetCurrentPoint(that);
+
+			var hyperlink = that.FindHyperlinkAt(point.Position);
+
+			that._hyperlinkOver = hyperlink;
+			hyperlink?.SetPointerOver(e.Pointer);
+		};
+
+		private static readonly PointerEventHandler OnPointerExit = (sender, e) =>
+		{
+			if (sender is not TextBlock { HasHyperlink: true } that)
+			{
+				return;
+			}
+
+			global::System.Diagnostics.Debug.Assert(that.FindHyperlinkAt(e.GetCurrentPoint(that).Position) == null);
+
+			that._hyperlinkOver?.ReleasePointerOver(e.Pointer);
+			that._hyperlinkOver = null;
+		};
+
 		private bool AbortHyperlinkCaptures(Pointer pointer)
 		{
 			var aborted = false;
 			foreach (var hyperlink in _hyperlinks.ToList()) // .ToList() : for a strange reason on WASM the collection gets modified
 			{
 				aborted |= hyperlink.hyperlink.AbortPointerPressed(pointer);
+				aborted |= hyperlink.hyperlink.ReleasePointerOver(pointer);
 			}
+
+			aborted |= _hyperlinkOver?.ReleasePointerOver(pointer) ?? false;
+			_hyperlinkOver = null;
 
 			return aborted;
 		}
@@ -868,20 +937,26 @@ namespace Windows.UI.Xaml.Controls
 
 		private void UpdateHyperlinks()
 		{
+			global::System.Diagnostics.Debug.Assert(_hyperlinkOver is null || _hyperlinks.Where(h => h.hyperlink == _hyperlinkOver).Count() == 1);
+
 			if (UseInlinesFastPath) // i.e. no Inlines
 			{
 				if (HasHyperlink)
 				{
 					RemoveHandler(PointerPressedEvent, OnPointerPressed);
 					RemoveHandler(PointerReleasedEvent, OnPointerReleased);
+					RemoveHandler(PointerMovedEvent, OnPointerMoved);
+					RemoveHandler(PointerEnteredEvent, OnPointerEntered);
+					RemoveHandler(PointerExitedEvent, OnPointerExit);
 					RemoveHandler(PointerCaptureLostEvent, OnPointerCaptureLost);
 
 					// Make sure to clear the pressed state of removed hyperlinks
 					foreach (var hyperlink in _hyperlinks)
 					{
-						hyperlink.hyperlink.AbortAllPointerPressed();
+						hyperlink.hyperlink.AbortAllPointerState();
 					}
 
+					_hyperlinkOver = null;
 					_hyperlinks.Clear();
 				}
 
@@ -890,10 +965,11 @@ namespace Windows.UI.Xaml.Controls
 
 			var previousHasHyperlinks = HasHyperlink;
 			var previousHyperLinks = _hyperlinks.Select(h => h.hyperlink).ToList();
+			_hyperlinkOver = null;
 			_hyperlinks.Clear();
 
 			var start = 0;
-			foreach (var inline in Inlines.SelectMany(InlineExtensions.Enumerate))
+			foreach (var inline in Inlines.PreorderTree)
 			{
 				switch (inline)
 				{
@@ -912,7 +988,7 @@ namespace Windows.UI.Xaml.Controls
 			// Make sure to clear the pressed state of removed hyperlinks
 			foreach (var removed in previousHyperLinks)
 			{
-				removed.AbortAllPointerPressed();
+				removed.AbortAllPointerState();
 			}
 
 			// Update events subscriptions if needed
@@ -921,17 +997,33 @@ namespace Windows.UI.Xaml.Controls
 			{
 				InsertHandler(PointerPressedEvent, OnPointerPressed);
 				InsertHandler(PointerReleasedEvent, OnPointerReleased);
+				InsertHandler(PointerMovedEvent, OnPointerMoved);
+				InsertHandler(PointerEnteredEvent, OnPointerEntered);
+				InsertHandler(PointerExitedEvent, OnPointerExit);
 				InsertHandler(PointerCaptureLostEvent, OnPointerCaptureLost);
 			}
 			else if (!HasHyperlink && previousHasHyperlinks)
 			{
 				RemoveHandler(PointerPressedEvent, OnPointerPressed);
 				RemoveHandler(PointerReleasedEvent, OnPointerReleased);
+				RemoveHandler(PointerMovedEvent, OnPointerMoved);
+				RemoveHandler(PointerEnteredEvent, OnPointerEntered);
+				RemoveHandler(PointerExitedEvent, OnPointerExit);
 				RemoveHandler(PointerCaptureLostEvent, OnPointerCaptureLost);
 			}
 		}
 
-		private bool HasHyperlink => _hyperlinks.Any();
+		private bool HasHyperlink
+		{
+			get
+			{
+				var hasHyperlink = _hyperlinks.Count > 0;
+
+				global::System.Diagnostics.Debug.Assert(!(!hasHyperlink && _hyperlinkOver is { }));
+
+				return hasHyperlink;
+			}
+		}
 
 #if !__SKIA__
 		private Hyperlink FindHyperlinkAt(Point point)
@@ -969,6 +1061,14 @@ namespace Windows.UI.Xaml.Controls
 			base.UpdateThemeBindings(updateReason);
 
 			SetDefaultForeground(ForegroundProperty);
+
+			if (_inlines is not null)
+			{
+				foreach (var inline in _inlines)
+				{
+					((IDependencyObjectStoreProvider)inline).Store.UpdateResourceBindings(updateReason);
+				}
+			}
 		}
 
 		internal override bool CanHaveChildren() => true;

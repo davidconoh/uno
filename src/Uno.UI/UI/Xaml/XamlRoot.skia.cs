@@ -1,41 +1,22 @@
 ﻿#nullable enable
 
-using System;
-using Uno.Disposables;
-using Uno.Foundation.Logging;
 using Uno.UI.Xaml.Core;
-using Uno.UI.Xaml.Islands;
-using Windows.Foundation;
-using Windows.Graphics.Display;
+using Windows.UI.Xaml.Input;
+using Windows.UI.Xaml.Controls;
 
 namespace Windows.UI.Xaml;
 
-public partial class XamlRoot
+partial class XamlRoot
 {
-	internal IDisposable OpenPopup(Controls.Primitives.Popup popup)
+	private FocusManager? _focusManager;
+
+	internal void InvalidateOverlays()
 	{
-		if (this.Log().IsEnabled(Uno.Foundation.Logging.LogLevel.Debug))
+		_focusManager ??= VisualTree.GetFocusManagerForElement(Content);
+		_focusManager?.FocusRectManager?.RedrawFocusVisual();
+		if (_focusManager?.FocusedElement is TextBox textBox)
 		{
-			this.Log().Debug($"Creating popup");
+			textBox.TextBoxView?.Extension?.InvalidateLayout();
 		}
-
-		if (VisualTree.PopupRoot == null)
-		{
-			throw new InvalidOperationException("PopupRoot is not initialized yet.");
-		}
-
-		var popupPanel = popup.PopupPanel;
-		VisualTree.PopupRoot.Children.Add(popupPanel);
-
-		return Disposable.Create(() =>
-		{
-
-			if (this.Log().IsEnabled(Uno.Foundation.Logging.LogLevel.Debug))
-			{
-				this.Log().Debug($"Closing popup");
-			}
-
-			VisualTree.PopupRoot.Children.Remove(popupPanel);
-		});
 	}
 }

@@ -1,15 +1,38 @@
+param(
+  [Parameter(ValueFromPipeLineByPropertyName = $true)]
+  $branches = $null
+)
+
 Set-PSDebug -Trace 1
 
-$external_docs =
-@(
-    @("https://github.com/unoplatform/uno.wasm.bootstrap", "uno.wasm.bootstrap", "4abadfc93ffeddc82420cc28af04cd7f6b2693ab"),
-    @("https://github.com/unoplatform/uno.themes", "uno.themes", "3e8e7dc8e816379d335cd13d11bd90227c7fcc44"),
-    @("https://github.com/unoplatform/uno.toolkit.ui", "uno.toolkit.ui", "d512cc88a541b2da858e7013b81d8a1b83d89272"),
-    @("https://github.com/unoplatform/uno.check", "uno.check", "e1b260c2e112b7dd92ed77ff46020dd265cd6b90"),
-    @("https://github.com/unoplatform/uno.xamlmerge.task", "uno.xamlmerge.task", "a6d2efa69e24e8280c38300b5c1b7a8f2033f9f9"),
-    @("https://github.com/unoplatform/figma-docs", "figma-docs", "a740582020509f9947fbf991628075a4717bff0a"),
-    @("https://github.com/unoplatform/uno.extensions", "uno.extensions", "fedd58366a66fb30d38c3e9676f9947b055836e6")
-)
+$external_docs = @{
+    # use either commit, or branch name to use its latest commit
+    "uno.wasm.bootstrap" = "5ef2048d98df307c738186a5339eedcc4665be72"
+    "uno.themes"         = "37e913dea361bcc13e20587184bb3691c6b31d3b"
+    "uno.toolkit.ui"     = "38838426c54a8465873442c7f677de457f19adbc"
+    "uno.check"          = "ec524c077487a6156674c9f18fbe073eae025bbf"
+    "uno.xamlmerge.task" = "7e8ffef206e87dfea90c53805c45e93a7d8c0b46"
+    "figma-docs"         = "abb770f1c853e9872d3826699d74107a5deb6538"
+    "uno.resizetizer"    = "3eec4aad0b7b3480ec6c2a121911ffde844fc4f8"
+    "uno.uitest"         = "555453c2985ef2745fe44503c5809a6168d063c2"
+    "uno.extensions"     = "ed4fda192785080f7040279643cd907e9285c232"
+    "workshops"          = "86256a9a42547be897e80566de608e886a9e1b52"
+}
+
+$uno_git_url = "https://github.com/unoplatform/"
+
+if($branches -ne $null)
+{
+    foreach ($repo in $branches.keys)
+    {
+        $branch = $branches[$repo]
+
+        $external_docs[$repo] = $branch
+    }
+}
+
+echo "Current setup:"
+$external_docs
 
 $ErrorActionPreference = 'Stop'
 
@@ -17,32 +40,61 @@ function Assert-ExitCodeIsZero()
 {
     if ($LASTEXITCODE -ne 0)
     {
+        popd
+        popd
+
+        Set-PSDebug -Off
+
         throw "Exit code must be zero."
-	}
+    }
 }
 
-mkdir articles\external -ErrorAction Continue
+if (-Not (Test-Path articles\external))
+{
+    mkdir articles\external -ErrorAction Continue
+}
+
 pushd articles\external
 
 # ensure long paths are supported on Windows
 git config --global core.longpaths true
 
+$detachedHeadConfig = git config --get advice.detachedHead
+git config advice.detachedHead false
+
 # Heads - Release
-for($i = 0; $i -lt $external_docs.Length; $i++)
+foreach ($repoPath in $external_docs.keys)
 {
-    $repoUrl=$external_docs[$i][0]
-    $repoPath=$external_docs[$i][1]
-    $repoBranch=$external_docs[$i][2]
-
-    echo "Cloning $repoPath ($repoUrl@$repoBranch)"
-
-    git clone $repoUrl $repoPath
-    Assert-ExitCodeIsZero
+    $repoUrl = "$uno_git_url$repoPath"
+    $repoBranch = $external_docs[$repoPath]
+        
+    if (-Not (Test-Path $repoPath))
+    {        
+        echo "Cloning $repoPath ($repoUrl@$repoBranch)..."
+        git clone $repoUrl $repoPath
+        Assert-ExitCodeIsZero
+    }
 
     pushd $repoPath
-    git checkout $repoBranch
+
+    echo "Checking out $repoUrl@$repoBranch..."
+    git fetch
+    git checkout --force $repoBranch
     Assert-ExitCodeIsZero
+
+    # if not detached
+    if ((git symbolic-ref -q HEAD) -ne $null)
+    {
+        echo "Resetting to $repoUrl@$repoBranch..."
+        git reset --hard origin/$repoBranch
+        Assert-ExitCodeIsZero
+    }
+
     popd
 }
 
+git config advice.detachedHead $detachedHeadConfig
+
 popd
+
+Set-PSDebug -Off

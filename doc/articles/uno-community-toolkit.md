@@ -1,3 +1,7 @@
+---
+uid: Uno.Development.CommunityToolkit
+---
+
 # How to use Windows Community Toolkit
 
 The [Windows Community Toolkit](https://docs.microsoft.com/en-us/windows/communitytoolkit/) is a collection of helper functions, custom controls, and app services. It simplifies and demonstrates common developer patterns when building experiences for Windows 10.
@@ -178,15 +182,15 @@ Replace:
 Add a conditional reference:
 
 ```xml
-<ItemGroup Condition="'$(TargetFramework)' == 'uap10.0.18362'">
+<ItemGroup Condition="'$(TargetFramework)' == 'uap10.0.19041'">
   <PackageReference Include="Microsoft.Toolkit.Uwp.UI.Controls" Version="7.0.0" />
 </ItemGroup>
-<ItemGroup Condition="'$(TargetFramework)' != 'uap10.0.18362'">
+<ItemGroup Condition="'$(TargetFramework)' != 'uap10.0.19041'">
   <PackageReference Include="Uno.Microsoft.Toolkit.Uwp.UI.Controls" Version="7.0.0" />
 </ItemGroup>
 ```
 
-You may need to replace `uap10.0.18362` with the version defined in the `TargetFrameworks` node at the top of the csproj file.
+You may need to replace `uap10.0.19041` with the version defined in the `TargetFrameworks` node at the top of the csproj file.
 
 ***
 

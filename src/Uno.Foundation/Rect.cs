@@ -14,6 +14,8 @@ public partial struct Rect
 	private const string _negativeErrorMessage = "Non-negative number required.";
 	private const float Epsilon = 0.00001f;
 
+	private static readonly char[] _commaSpaceArray = new[] { ',', ' ' };
+
 	public static Rect Empty { get; } = new Rect
 	{
 		X = double.PositiveInfinity,
@@ -128,7 +130,7 @@ public partial struct Rect
 		}
 
 		var parts = text
-			.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+			.Split(_commaSpaceArray, StringSplitOptions.RemoveEmptyEntries)
 			.SelectToArray(s => double.Parse(s, NumberFormatInfo.InvariantInfo));
 
 		if (parts.Length != 4)
@@ -148,6 +150,11 @@ public partial struct Rect
 
 	public static implicit operator string(Rect rect)
 	{
+		if (rect.IsEmpty)
+		{
+			return "Empty.";
+		}
+
 		var sb = new StringBuilder();
 		sb.Append(rect.X.ToStringInvariant());
 		sb.Append(',');
@@ -193,6 +200,13 @@ public partial struct Rect
 			Y = value.Y;
 		}
 	}
+
+	/// <summary>
+	/// Provides the location of this rectangle.
+	/// </summary>
+	/// <remarks>This method is not provided by UWP, hence it is marked internal.</remarks>
+	/// <remarks>Unlike the Location property, this is accessible to UWP code through an extension method.</remarks>
+	internal Point GetLocation() => Location;
 
 	/// <summary>Expands or shrinks the rectangle by using the specified width and height amounts, in all directions. </summary>
 	/// <param name="width">The amount by which to expand or shrink the left and right sides of the rectangle.</param>

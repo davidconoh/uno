@@ -1,4 +1,13 @@
-# Uno Support for Windows.ApplicationModel.Contacts
+---
+uid: Uno.Features.WAMContacts
+---
+
+# Contacts
+
+> [!TIP]
+> This article covers Uno-specific information for `Windows.ApplicationModel.Contacts` namespace. For a full description of the feature and instructions on using it, consult the UWP documentation: https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.contacts
+
+* The `Windows.ApplicationModel.Contacts.ContactPicker` namespace provides classes for picking contacts from the OS contact store.
 
 ## `ContactPicker`
 

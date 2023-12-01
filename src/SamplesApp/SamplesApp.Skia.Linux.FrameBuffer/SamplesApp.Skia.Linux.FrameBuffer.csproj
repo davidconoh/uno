@@ -1,49 +1,49 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-    <TargetFrameworks>netcoreapp3.1;net5.0</TargetFrameworks>
+		<TargetFrameworks>$(NetSkiaPreviousAndCurrent)</TargetFrameworks>
 		<RollForward>Major</RollForward>
 	</PropertyGroup>
-	
-	<PropertyGroup Condition="'$(MSBuildRuntimeType)'=='Core'">
-		<TargetFrameworks>$(TargetFrameworks);net7.0</TargetFrameworks>
-	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(UnoTargetFrameworkOverride)'=='netstandard2.0'">
-		<TargetFrameworks>netcoreapp3.1</TargetFrameworks>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(UnoTargetFrameworkOverride)'!='' and '$(UnoTargetFrameworkOverride)'!='netstandard2.0'">
-		<TargetFrameworks>$(UnoTargetFrameworkOverride)</TargetFrameworks>
-	</PropertyGroup>
+	<Import Project="../../targetframework-override.props" />
 
 	<PropertyGroup>
-    <OutputType>Exe</OutputType>
-  </PropertyGroup>
+		<OutputType>Exe</OutputType>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <Prefer32Bit>true</Prefer32Bit>
-  </PropertyGroup>
-	
+		<!-- Required in CI to avoid dependency issues -->
+		<PreBuildUnoUITasks>true</PreBuildUnoUITasks>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<Prefer32Bit>true</Prefer32Bit>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<PackageReference Include="SkiaSharp" />
 		<PackageReference Include="SkiaSharp.NativeAssets.Linux" />
 	</ItemGroup>
-	
+
 	<ItemGroup>
-	  <ProjectReference Include="..\..\SourceGenerators\System.Xaml\Uno.Xaml.csproj" />
-	  <ProjectReference Include="..\..\Uno.Foundation\Uno.Foundation.Skia.csproj" />
-	  <ProjectReference Include="..\..\Uno.UI.Runtime.Skia.Linux.FrameBuffer\Uno.UI.Runtime.Skia.Linux.FrameBuffer.csproj" />
-	  <ProjectReference Include="..\..\Uno.UI\Uno.UI.Skia.csproj" />
-	  <ProjectReference Include="..\..\Uno.UWP\Uno.Skia.csproj" />
-	  <ProjectReference Include="..\SamplesApp.Skia\SamplesApp.Skia.csproj" />
-	</ItemGroup>
-	
-	<ItemGroup>
-	  <Compile Update="Program.cs" />
+		<ProjectReference Include="..\..\SourceGenerators\System.Xaml\Uno.Xaml.csproj" />
+		<ProjectReference Include="..\..\Uno.Foundation\Uno.Foundation.Skia.csproj" />
+		<ProjectReference Include="..\..\Uno.UI.Runtime.Skia.Linux.FrameBuffer\Uno.UI.Runtime.Skia.Linux.FrameBuffer.csproj" />
+		<ProjectReference Include="..\..\Uno.UI\Uno.UI.Skia.csproj" />
+		<ProjectReference Include="..\..\Uno.UWP\Uno.Skia.csproj" />
+		<ProjectReference Include="..\SamplesApp.Skia\SamplesApp.Skia.csproj" />
 	</ItemGroup>
 
-	<Import Project="..\..\..\build\*.Skia.Gtk.props" />
-	<Import Project="..\..\..\build\*.Skia.Gtk.targets" />
+	<ItemGroup>
+		<Compile Update="Program.cs" />
+	</ItemGroup>
+
+	<Import Project="..\..\..\build\nuget\*.Skia.Gtk.props" />
+	<Import Project="..\..\..\build\nuget\*.Skia.Gtk.targets" />
+
+	<PropertyGroup>
+		<UnoUIMSBuildTasksPath>$(MSBuildThisFileDirectory)..\..\SourceGenerators\Uno.UI.Tasks\bin\$(Configuration)_Shadow</UnoUIMSBuildTasksPath>
+	</PropertyGroup>
+
+	<Import Project="..\..\SourceGenerators\Uno.UI.Tasks\Content\Uno.UI.Tasks.targets" Condition="'$(SkipUnoResourceGeneration)' == '' " />
+
 
 	<Target Name="_ValidatePublishedItems" AfterTargets="Publish">
 		<ItemGroup>

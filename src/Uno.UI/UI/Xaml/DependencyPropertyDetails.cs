@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Uno.Buffers;
 using Uno.UI.DataBinding;
@@ -21,20 +22,23 @@ namespace Windows.UI.Xaml
 		private readonly Type _dependencyObjectType;
 		private object? _fastLocalValue;
 		private BindingExpression? _binding;
-		private static readonly ArrayPool<object?> _pool = ArrayPool<object?>.Shared;
 		private object?[]? _stack;
 		private PropertyMetadata? _metadata;
 		private object? _defaultValue;
 		private Flags _flags;
 		private DependencyPropertyCallbackManager? _callbackManager;
 
-		private const int MaxIndex = (int)DependencyPropertyValuePrecedences.DefaultValue;
-		private const int _stackLength = MaxIndex + 1;
+		private const int DefaultValueIndex = (int)DependencyPropertyValuePrecedences.DefaultValue;
+		private const int StackSize = DefaultValueIndex + 1;
+
+		private static readonly LinearArrayPool<object?> _pool = LinearArrayPool<object?>.CreateAutomaticallyManaged(StackSize, 1);
+
 		private static readonly object[] _unsetStack;
+
 		static DependencyPropertyDetails()
 		{
-			_unsetStack = new object[_stackLength];
-			for (var i = 0; i < _stackLength; i++)
+			_unsetStack = new object[StackSize];
+			for (var i = 0; i < StackSize; i++)
 			{
 				_unsetStack[i] = DependencyProperty.UnsetValue;
 			}
@@ -60,10 +64,12 @@ namespace Windows.UI.Xaml
 		/// Constructor
 		/// </summary>
 		/// <param name="defaultValue">The default value of the Dependency Property</param>
-		internal DependencyPropertyDetails(DependencyProperty property, Type dependencyObjectType, bool hasInherits, bool hasValueInherits, bool hasValueDoesNotInherits)
+		internal DependencyPropertyDetails(DependencyProperty property, Type dependencyObjectType, bool isTemplatedParentOrDataContext)
 		{
 			Property = property;
 			_dependencyObjectType = dependencyObjectType;
+
+			GetPropertyInheritanceConfiguration(isTemplatedParentOrDataContext, out var hasInherits, out var hasValueInherits, out var hasValueDoesNotInherits);
 
 			_flags |= property.HasWeakStorage ? Flags.WeakStorage : Flags.None;
 			_flags |= hasValueInherits ? Flags.ValueInherits : Flags.None;
@@ -71,11 +77,39 @@ namespace Windows.UI.Xaml
 			_flags |= hasInherits ? Flags.Inherits : Flags.None;
 		}
 
-		private object? GetDefaultValue()
+		private void GetPropertyInheritanceConfiguration(
+			bool isTemplatedParentOrDataContext,
+			out bool hasInherits,
+			out bool hasValueInherits,
+			out bool hasValueDoesNotInherit)
+		{
+			if (isTemplatedParentOrDataContext)
+			{
+				// TemplatedParent is a DependencyObject but does not propagate datacontext
+				hasValueInherits = false;
+				hasValueDoesNotInherit = true;
+				hasInherits = true;
+				return;
+			}
+
+			if (Metadata is FrameworkPropertyMetadata propertyMetadata)
+			{
+				hasValueInherits = propertyMetadata.Options.HasValueInheritsDataContext();
+				hasValueDoesNotInherit = propertyMetadata.Options.HasValueDoesNotInheritDataContext();
+				hasInherits = propertyMetadata.Options.HasInherits();
+				return;
+			}
+
+			hasValueInherits = false;
+			hasValueDoesNotInherit = false;
+			hasInherits = false;
+		}
+
+		internal object? GetDefaultValue()
 		{
 			if (!HasDefaultValueSet)
 			{
-				_defaultValue = Property.GetMetadata(_dependencyObjectType).DefaultValue;
+				_defaultValue = Metadata.DefaultValue;
 
 				// Ensures that the default value of non-nullable properties is not null
 				if (_defaultValue == null && !Property.IsTypeNullable)
@@ -130,8 +164,33 @@ namespace Windows.UI.Xaml
 				return;
 			}
 
-			// If we were unsetting the current highest precedence value, we need to find the next highest
-			if (valueIsUnsetValue && precedence == _highestPrecedence)
+			// On Windows, explicitly calling SetValue(dp, DP.UnsetValue) or ClearValue(dp) doesnt clear the animation value.
+			// (note: Both the methods target local value)
+			// This means that we should not be handling those special case in here. Instead,
+			// when Timeline clears the animation value, it should also clears the filling animation value at the same time.
+			// ---
+			// Clear the animated value, when we are setting a local value to a property
+			// with an animated value from the filling part of an HoldEnd animation.
+			// note: There is no equivalent block in SetValueFast, as its condition would never be satisfied:
+			// _stack would've been materialized if the property had been animated.
+			bool forceUpdatePrecedence = false;
+			if (!valueIsUnsetValue &&
+				_highestPrecedence == DependencyPropertyValuePrecedences.FillingAnimations &&
+				(precedence is DependencyPropertyValuePrecedences.Local or DependencyPropertyValuePrecedences.Animations))
+			{
+				stackAlias[(int)DependencyPropertyValuePrecedences.FillingAnimations] = UnsetValue.Instance;
+				if (precedence is DependencyPropertyValuePrecedences.Local)
+				{
+					stackAlias[(int)DependencyPropertyValuePrecedences.Animations] = UnsetValue.Instance;
+				}
+
+				forceUpdatePrecedence = true;
+			}
+
+			// Update highest precedence, when the current highest value was unset or
+			// when animation value was overridden by local value.
+			if ((valueIsUnsetValue && precedence == _highestPrecedence) ||
+				forceUpdatePrecedence)
 			{
 				// Start from current precedence and find next highest
 				for (int i = (int)precedence; i < (int)DependencyPropertyValuePrecedences.DefaultValue; i++)
@@ -331,13 +390,12 @@ namespace Windows.UI.Xaml
 			{
 				if (_stack == null)
 				{
-					_stack = _pool.Rent(_stackLength);
+					_stack = _pool.Rent(StackSize);
 
-					Array.Copy(_unsetStack, _stack, _stackLength);
+					MemoryMarshal.CreateSpan(ref MemoryMarshal.GetArrayDataReference(_unsetStack), StackSize)
+						.CopyTo(MemoryMarshal.CreateSpan(ref MemoryMarshal.GetArrayDataReference(_stack)!, StackSize));
 
-					var defaultValue = GetDefaultValue();
-
-					_stack[MaxIndex] = defaultValue;
+					_stack[DefaultValueIndex] = GetDefaultValue();
 
 					if (_highestPrecedence == DependencyPropertyValuePrecedences.Local)
 					{
@@ -377,7 +435,7 @@ namespace Windows.UI.Xaml
 			=> _callbackManager?.RaisePropertyChanged(actualInstanceAlias, eventArgs);
 
 		[Flags]
-		enum Flags
+		private enum Flags : byte
 		{
 			/// <summary>
 			/// No flag is being set

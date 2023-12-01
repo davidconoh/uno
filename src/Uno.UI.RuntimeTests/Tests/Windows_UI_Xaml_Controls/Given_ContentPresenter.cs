@@ -5,11 +5,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Private.Infrastructure;
+using Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls.ContentPresenterPages;
 using Windows.Foundation;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Shapes;
 
 namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls;
 
@@ -21,6 +23,38 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls;
 #endif
 public class Given_ContentPresenter
 {
+	[TestMethod]
+	public async Task When_Padding_Set_In_SizeChanged()
+	{
+		var SUT = new ContentPresenter()
+		{
+			Width = 200,
+			Height = 200,
+			Content = new Border()
+			{
+				Child = new Ellipse()
+				{
+					Fill = new SolidColorBrush(Colors.DarkOrange)
+				}
+			}
+		};
+
+		SUT.SizeChanged += (sender, args) => SUT.Padding = new Thickness(0, 200, 0, 0);
+
+		TestServices.WindowHelper.WindowContent = SUT;
+		await TestServices.WindowHelper.WaitForLoaded(SUT);
+		await TestServices.WindowHelper.WaitForIdle();
+
+		// We have a problem on IOS and Android where SUT isn't relayouted after the padding
+		// change even though IsMeasureDirty is true. This is a workaround to explicity relayout.
+#if __IOS__ || __ANDROID__
+		SUT.InvalidateMeasure();
+		SUT.UpdateLayout();
+#endif
+
+		Assert.AreEqual(200, ((UIElement)VisualTreeHelper.GetChild(SUT, 0)).ActualOffset.Y);
+	}
+
 	[TestMethod]
 	public void When_Content_Alignment_Set_Default_Alignment_Not_Overriden()
 	{
@@ -34,6 +68,113 @@ public class Given_ContentPresenter
 		Assert.AreEqual(HorizontalAlignment.Center, contentPresenter.HorizontalContentAlignment);
 		Assert.AreEqual(HorizontalAlignment.Stretch, border.HorizontalAlignment);
 	}
+
+	[TestMethod]
+	public void When_Binding_And_DataContext_Same_As_Content()
+	{
+		var SUT = new ContentPresenter();
+		var dataContextChangedCount = 0;
+
+		SUT.DataContextChanged += (s, e) => dataContextChangedCount++;
+
+		SUT.DataContext = new object();
+		SUT.Content = SUT.DataContext;
+
+		TestServices.WindowHelper.WindowContent = SUT;
+
+		// This test ensures that the ContentPresenter does not reset
+		// the DataContext to null and then back to the content and have
+		// two-way bindings propagating the null value back to the source.
+		Assert.AreEqual(1, dataContextChangedCount);
+	}
+
+	[TestMethod]
+	public void When_Content_Presenter_Empty()
+	{
+		var sut = new ContentPresenter_Content_DataContext();
+
+		TestServices.WindowHelper.WindowContent = sut;
+
+		Assert.AreEqual("", GetTextBlockText(sut, "emptyTest"));
+
+		sut.emptyTestRoot.DataContext = "43";
+
+		Assert.AreEqual("43", GetTextBlockText(sut, "emptyTest"));
+	}
+
+	[TestMethod]
+	public void When_Content_Presenter_Priority()
+	{
+		var sut = new ContentPresenter_Content_DataContext();
+
+		TestServices.WindowHelper.WindowContent = sut;
+
+		Assert.AreEqual("43", GetTextBlockText(sut, "priorityTest"));
+
+		sut.priorityTestRoot.DataContext = "44";
+		Assert.AreEqual("44", GetTextBlockText(sut, "priorityTest"));
+
+		sut.priorityTestRoot.Content = "45";
+		Assert.AreEqual("45", GetTextBlockText(sut, "priorityTest"));
+
+		sut.priorityTestRoot.DataContext = "46";
+		Assert.AreEqual("46", GetTextBlockText(sut, "priorityTest"));
+	}
+
+	[TestMethod]
+	public void When_Content_Presenter_SameValue()
+	{
+		var sut = new ContentPresenter_Content_DataContext();
+
+		TestServices.WindowHelper.WindowContent = sut;
+
+		Assert.AreEqual("42", GetTextBlockText(sut, "sameValueTest"));
+	}
+
+	[TestMethod]
+	public void When_Content_Presenter_Inheritance()
+	{
+		var sut = new ContentPresenter_Content_DataContext();
+
+		TestServices.WindowHelper.WindowContent = sut;
+
+		Assert.AreEqual("DataContext", GetTextBlockText(sut, "inheritanceTest"));
+
+		sut.inheritanceTestRoot.DataContext = "46";
+		Assert.AreEqual("46", GetTextBlockText(sut, "inheritanceTest"));
+
+		sut.inheritanceTestRoot.DataContext = "47";
+		Assert.AreEqual("47", GetTextBlockText(sut, "inheritanceTest"));
+
+		sut.inheritanceTestInner.DataContext = "48";
+		Assert.AreEqual("48", GetTextBlockText(sut, "inheritanceTest"));
+
+		sut.inheritanceTestRoot.DataContext = "49";
+		Assert.AreEqual("48", GetTextBlockText(sut, "inheritanceTest"));
+	}
+
+	[TestMethod]
+	public void When_Content_Presenter_SameValue_Changing()
+	{
+		var sut = new ContentPresenter_Content_DataContext();
+
+		TestServices.WindowHelper.WindowContent = sut;
+
+		Assert.AreEqual("DataContext", GetTextBlockText(sut, "sameValueChangingTest"));
+	}
+
+	[TestMethod]
+	public void When_Content_Presenter_Null_Content_Changed()
+	{
+		var sut = new ContentPresenter_Content_DataContext();
+
+		TestServices.WindowHelper.WindowContent = sut;
+
+		Assert.AreEqual("42", GetTextBlockText(sut, "nullContentChanged"));
+	}
+
+	static string GetTextBlockText(FrameworkElement sut, string v)
+		=> (sut.FindName(v) as TextBlock)?.Text ?? "";
 
 	public static IEnumerable<object[]> GetAlignments()
 	{

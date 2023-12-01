@@ -1,152 +1,74 @@
-# Get Started on VS Code
+---
+uid: Uno.GetStarted.vscode
+---
 
-This guide will walk you through the set-up process for building WebAssembly and Gtk+ apps with Uno under Windows, Linux, or macOS.
+## Get Started on VS Code
+
+This guide will walk you through the set-up process for building apps with Uno under Windows, Linux or macOS.
 
 See these sections for information about using Uno Platform with:
+
 - [Codespaces](features/working-with-codespaces.md)
 - [Gitpod](features/working-with-gitpod.md)
 
 ## Prerequisites
 
-* [**Visual Studio Code**](https://code.visualstudio.com/)
-* **.NET SDK**
-    * [.NET 7.0 SDK](https://dotnet.microsoft.com/download/dotnet-core/6.0) (**version 7.0 (SDK 7.0.102)** or later)
-    > Use `dotnet --version` from the terminal to get the version installed.
-* The [Uno Platform Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=unoplatform.vscode) Extension
-* For Windows, install the [GTK+ 3 runtime](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases) (See [this uno-check issue](https://github.com/unoplatform/uno.check/issues/12))
+- [**Visual Studio Code**](https://code.visualstudio.com/)
+- The [Uno Platform Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=unoplatform.vscode) Extension
+- For Windows, install the [GTK+ 3 runtime](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases) (See [this uno-check issue](https://github.com/unoplatform/uno.check/issues/12))
+- For Linux, install [OpenJDK 11](https://learn.microsoft.com/en-us/java/openjdk/install#install-on-ubuntu) for Android development.
 
-[!include[getting-help](use-uno-check-inline.md)]
+## Check your environment
 
-## Developing an Uno Platform project
+[!include[getting-help](use-uno-check-inline-noheader.md)]
 
-### Create the project
+## Configure VS Code
 
-In the terminal, type the following to create a new project:
+If you are new to VS Code or to developing C# applications with VS Code take the time to follow the next steps.
 
-```bash
-dotnet new unoapp -o MyApp -mobile=false --skia-wpf=false --skia-linux-fb=false --vscode
-```
+1. Open VS Code
+1. If this is not a new installation then try to update it. Press `F1` and type `Code: Check for Updates...` and select it. A notification will tell you if an update is available.
+1. Configure VS Code to start from the command-line using the `code` command. This can be configured by following [these instructions](https://code.visualstudio.com/docs/editor/command-line#_launching-from-command-line).
+1. Install the **C#** extension. Press `F1` and type `Extensions: Install Extensions`, search the marketplace for **C#** and click the **Install** button.
+1. Install the **Uno Platform** extension. Press `F1` and type `Extensions: Install Extensions`, search the marketplace for **Uno Platform** and click the **Install** button.
 
-> `MyApp` is the name you want to give to your project.
+No other extensions are needed to complete this guide.
 
-This will create a solution that only contains the WebAssembly and Skia+GTK platforms support.
+## C# Dev Kit Compatibility
 
-## Prepare the WebAssembly application
+At this time, the preview version of the [C# Dev Kit extension](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit) `ms-dotnettools.csdevkit` is not compatible with the Uno Platform extension. It requires a preview version of the [C# extension](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) `ms-dotnettools.csharp` that contains major breaking changes.
 
-1. Open the project using Visual Studio Code. In the terminal type
+You can use both the Uno Platform and C# Dev Kit extensions but not simultaneously. The easiest way to accomplish this is to [create profiles](https://code.visualstudio.com/docs/editor/profiles) inside VSCode. Using this method, you can:
 
-    ```bash
-    code ./MyApp
-    ```
+1. Create one profile for **Uno Platform**
+2. Disable, if installed, C# Dev Kit extension
+3. Enable `useOmnisharp` inside the configuration
+![useOmnisharp](Assets/quick-start/vs-code-useOmniSharp.png)
 
-    > For this command to work you need to previously have configured Visual Studio Code to be launched from the terminal.
+4. Create another profile for **C# Dev Kit**
+5. Enable (or install) the C# Dev Kit extension
+6. Ensure that `useOmnisharp` is disabled inside the configuration
+7. Disable the Uno Platform extension
 
-1. Visual Studio Code will ask to restore the NuGet packages.
-1. Once the project has been loaded, in the status bar at the bottom left of VS Code, `MyApp.sln` is selected by default. Select `MyApp.Wasm.csproj` or `MyApp.Skia.Gtk.csproj` instead.
+You can then switch between both profiles according to the type of dotnet project you are developing.
 
-## Modify the template
+## Platform specific setup
 
-1. In `MainPage.xaml`, replace the Grid's content with the following:
+You may need to follow additional directions, depending on your development environment.
 
-    ```xml
-    <StackPanel>
-        <TextBlock x:Name="txt"
-                    Text="Hello, world!"
-                    Margin="20"
-                    FontSize="30" />
-        <Button Content="click"
-                Click="{x:Bind OnClick}" />
-    </StackPanel>
-    ```
+# [**Windows**](#tab/windows)
 
-2. In your `MainPage.xaml.cs`, add the following method:
+[!include[windows-setup](additional-windows-setup-inline.md)]
 
-    ```csharp
-    private void OnClick()
-    {
-        var dt = DateTime.Now.ToString();
-        txt.Text = dt;
-    }
-    ```
+# [**Linux**](#tab/linux)
 
-## Run and Debug application
+[!include[linux-setup](additional-linux-setup-inline.md)]
 
-### WebAssembly
-1. In the debugger section of the Code activity bar, select `Debug (Chrome, WebAssembly)`
-1. Press `F5` to start the debugging session
-1. Place a breakpoint inside the `OnClick` method
-1. Click the button in the app, and the breakpoint will hit
+# [**macOS**](#tab/macos)
 
-### Skia GTK
-1. In the debugger section of the Code activity bar, select `Skia.GTK (Debug)`
-1. Press `F5` to start the debugging session
-1. Place a breakpoint inside the `OnClick` method
-1. Click the button in the app, and the breakpoint will hit
+[!include[macos-setup](additional-macos-setup-inline.md)]
 
-Note that C# Hot Reload is not available when running with the debugger. In order to use C# Hot Reload, run the app using the following:
-- On Windows, type the following:
-    ```
-    $env:DOTNET_MODIFIABLE_ASSEMBLIES="debug"
-    dotnet run
-    ```
-- On Linux or macOS:
-    ```
-    export DOTNET_MODIFIABLE_ASSEMBLIES=debug
-    dotnet run
-    ```
+***
 
-## Using code snippets
-
-### Adding a new Page
-1. In the MyApp folder, create a new file named `Page2.xaml`
-2. Type `page` then press the `tab` key to add the page markup
-3. Adjust the name and namespaces as needed
-4. In the MyApp folder, create a new file named `Page2.xaml.cs`
-5. Type `page` then press the `tab` key to add the page code behind C#
-6. Adjust the name and namespaces as needed
-
-### Adding a new UserControl
-1. In the MyApp folder, create a new file named `UserControl1.xaml`
-2. Type `usercontrol` then press the `tab` key to add the page markup
-3. Adjust the name and namespaces as needed
-4. In the MyApp folder, create a new file named `UserControl1.xaml.cs`
-5. Type `usercontrol` then press the `tab` key to add the page code behind C#
-6. Adjust the name and namespaces as needed
-
-### Adding a new ResourceDictionary
-1. In the MyApp folder, create a new file named `ResourceDictionary1.xaml`
-2. Type `resourcedict` then press the `tab` key to add the page markup
-
-### Other snippets
-* `rd` creates a new `RowDefinition`
-* `cd` creates a new `ColumnDefinition`
-* `tag` creates a new XAML tag
-* `set` creates a new `Style` setter
-* `ctag` creates a new `TextBlock` close XAML tag
-
-## Updating an existing application to work with VS Code
-
-An existing application needs additional changes to be debugged properly.
-
-1. At the root of the workspace, create a folder named `.vscode`
-2. Inside this folder, create a file named `launch.json` and copy the [contents of this file](https://github.com/unoplatform/uno/blob/master/src/SolutionTemplate/Uno.ProjectTemplates.Dotnet/content/unoapp/.vscode/launch.json).
-3. Replace all instances of `UnoQuickStart` with your application's name in `launch.json`.
-4. Inside this folder, create a file named `tasks.json` and copy the [contents of this file](https://github.com/unoplatform/uno/blob/master/src/SolutionTemplate/Uno.ProjectTemplates.Dotnet/content/unoapp/.vscode/tasks.json).
-
-### Known limitations for Code support
-- C# Debugging is not supported when running in a remote Linux Container, Code Spaces or GitPod.
-- C# Hot Reload for WebAssembly only supports modifying method bodies. Any other modification is rejected by the compiler.
-- C# Hot Reload for Skia supports modifying method bodies, adding properties, adding methods, adding classes. A more accurate list is provided here in Microsoft's documentation.
-
-## Troubleshooting Uno Platform VS Code issues
-
-If you're not sure whether your environment is correctly configured for Uno Platform development, running the [`uno-check` command-line tool](external/uno.check/doc/using-uno-check.md) should be your first step.
-
-The Uno Platform extension provides multiple output windows to troubleshoot its activities:
-- **Uno Platform**, which indicates general messages about the extension
-- **Uno Platform - Hot Reload**, which provides activity messages about the Hot Reload feature
-- **Uno Platform - XAML**, which provides activity messages about the XAML Code Completion feature
-
-If the extension is not behaving properly, try using the `Developer: Reload Window` (or `Ctrl+R`) command in the palette.
-
-[!include[getting-help](getting-help.md)]
+## Next Steps
+You're all set! You can now [create your first app](xref:Uno.GettingStarted.CreateAnApp.vscode) with Uno Platform.

@@ -31,6 +31,8 @@ using Windows.System;
 using Windows.UI.Xaml.Automation.Peers;
 using Windows.UI.Xaml.Automation;
 using Uno.UI.Controls;
+using Uno.UI.Xaml.Core;
+using WinUICoreServices = Uno.UI.Xaml.Core.CoreServices;
 
 #if HAS_UNO_WINUI
 using Microsoft.UI.Input;
@@ -1156,6 +1158,11 @@ namespace Windows.UI.Xaml.Controls
 				{
 					layoutBounds = Windows.UI.Xaml.Window.Current.Bounds;
 
+					if (WinUICoreServices.Instance.InitializationType == InitializationType.IslandsOnly)
+					{
+						layoutBounds = XamlRoot?.Bounds ?? new();
+					}
+
 					shouldOpenUp = offsetFromRootOpenedUp.Y >= layoutBounds.Y;
 				}
 			}
@@ -1181,6 +1188,10 @@ namespace Windows.UI.Xaml.Controls
 			neededOffset = -verticalDelta;
 			opensWindowed = false;
 		}
+
+		// This is an internal method used in CommandBar-related workarounds without
+		// breaking the public API
+		internal bool TryDismissInlineAppBarInternal() => TryDismissInlineAppBar();
 
 		protected bool TryDismissInlineAppBar()
 		{

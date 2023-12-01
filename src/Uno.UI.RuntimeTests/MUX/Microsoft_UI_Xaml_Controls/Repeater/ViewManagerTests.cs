@@ -16,7 +16,9 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Markup;
 using Windows.UI.Xaml.Media;
 using Common;
+#if !HAS_UNO_WINUI
 using Microsoft.UI.Xaml.Controls;
+#endif
 #if USING_TAEF
 using WEX.TestExecution;
 using WEX.TestExecution.Markup;
@@ -35,10 +37,12 @@ using RecyclingElementFactory = Microsoft.UI.Xaml.Controls.RecyclingElementFacto
 using RecyclePool = Microsoft.UI.Xaml.Controls.RecyclePool;
 using StackLayout = Microsoft.UI.Xaml.Controls.StackLayout;
 using ItemsRepeaterScrollHost = Microsoft.UI.Xaml.Controls.ItemsRepeaterScrollHost;
+using Private.Infrastructure;
 
 namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests.RepeaterTests
 {
 	[TestClass]
+	[Uno.UI.RuntimeTests.RunsOnUIThread]
 	public class ViewManagerTests : MUXApiTestBase
 	{
 		[TestMethod]
@@ -251,14 +255,12 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests.RepeaterTests
 				// from the stable reset pool and maybe created some new elements as well.
 				int index = repeater.GetElementIndex(focusedElement);
 				Log.Comment("focused index " + index);
-				Verify.AreEqual(mapping[1], FocusManager.GetFocusedElement());
+				Verify.AreEqual(mapping[1], FocusManager.GetFocusedElement(TestServices.WindowHelper.XamlRoot));
 			});
 		}
 
 		[TestMethod]
-#if __WASM__ || __ANDROID__ || __SKIA__ || __MACOS__
 		[Ignore("UNO: Test does not pass yet with Uno https://github.com/unoplatform/uno/issues/4529")]
-#endif
 		public void CanChangeFocusAfterUniqueIdReset()
 		{
 			var data = new WinRTCollection(Enumerable.Range(0, 2).Select(i => string.Format("Item #{0}", i)));
@@ -283,7 +285,7 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests.RepeaterTests
 			RunOnUIThread.Execute(() =>
 			{
 				// Still focused.
-				Verify.AreEqual(focusedElement, FocusManager.GetFocusedElement());
+				Verify.AreEqual(focusedElement, FocusManager.GetFocusedElement(TestServices.WindowHelper.XamlRoot));
 
 				// Change focused element.
 				focusedElement = (Control)repeater.TryGetElement(1);
@@ -294,7 +296,7 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests.RepeaterTests
 			RunOnUIThread.Execute(() =>
 			{
 				// Focus is on the new element.
-				Verify.AreEqual(focusedElement, FocusManager.GetFocusedElement());
+				Verify.AreEqual(focusedElement, FocusManager.GetFocusedElement(TestServices.WindowHelper.XamlRoot));
 			});
 		}
 
@@ -833,7 +835,7 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests.RepeaterTests
 
 		private void ValidateCurrentFocus(ItemsRepeater repeater, int expectedIndex, string expectedContent)
 		{
-			var currentFocus = FocusManager.GetFocusedElement() as ContentControl;
+			var currentFocus = FocusManager.GetFocusedElement(TestServices.WindowHelper.XamlRoot) as ContentControl;
 			var currentFocusedIndex = repeater.GetElementIndex(currentFocus);
 			Log.Comment("expectedIndex: " + expectedIndex + " actual : " + currentFocusedIndex);
 			Verify.AreEqual(expectedIndex, currentFocusedIndex);

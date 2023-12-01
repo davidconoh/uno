@@ -5,14 +5,18 @@
     xmlns:local="using:UITests.Windows_Media"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	xmlns:android="http://platform.uno/android"
-	xmlns:ios="http://platform.uno/android"
+    xmlns:android="http://platform.uno/android"
+    xmlns:ios="http://platform.uno/ios"
     mc:Ignorable="d android ios"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <StackPanel>
-		<android:Button Content="Capture Image" Click="CaptureButton_Click" />
-		<ios:Button Content="Capture Image" Click="CaptureButton_Click" />
+		<android:Button Content="Capture Image" Click="CaptureImage_Click" />
+		<android:Button Content="Capture Video" Click="CaptureVideo_Click" />
+		<ios:Button Content="Capture Image" Click="CaptureImage_Click" />
+		<ios:Button Content="Capture Video" Click="CaptureVideo_Click" />
 		<Image x:Name="ImageControl" />
+		<TextBlock x:Name="videoSize"
+				   TextWrapping="WrapWholeWords" />
 	</StackPanel>
 </Page>

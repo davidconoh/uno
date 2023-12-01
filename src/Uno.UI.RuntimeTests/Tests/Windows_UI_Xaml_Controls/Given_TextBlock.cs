@@ -3,9 +3,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Uno.UI.RuntimeTests.Helpers;
+using Uno.Helpers;
 using Windows.Foundation;
 using Windows.Foundation.Metadata;
 using Windows.UI;
+using Windows.UI.Text;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Documents;
@@ -18,6 +20,21 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 	[TestClass]
 	public class Given_TextBlock
 	{
+		[TestMethod]
+		[RunsOnUIThread]
+		public async Task Check_TextDecorations_Binding()
+		{
+			var SUT = new TextDecorationsBinding();
+			WindowHelper.WindowContent = SUT;
+			await WindowHelper.WaitForIdle();
+			Assert.AreEqual(TextDecorations.Strikethrough, SUT.textBlock1.TextDecorations);
+			Assert.AreEqual(TextDecorations.Underline, SUT.textBlock2.TextDecorations);
+			Assert.AreEqual(TextDecorations.Strikethrough, SUT.textBlock3.TextDecorations);
+			Assert.AreEqual(TextDecorations.None, SUT.textBlock4.TextDecorations);
+			Assert.AreEqual(TextDecorations.Strikethrough, SUT.textBlock5.TextDecorations);
+			Assert.AreEqual(TextDecorations.None, SUT.textBlock6.TextDecorations);
+		}
+
 		[TestMethod]
 		[RunsOnUIThread]
 		public void Check_ActualWidth_After_Measure()
@@ -103,6 +120,28 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 		[TestMethod]
 		[RunsOnUIThread]
+		[Ignore("Fails")]
+		public async Task When_Text_Ends_In_Return()
+		{
+			var SUT = new TextBlock
+			{
+				Text = "hello world"
+			};
+
+			WindowHelper.WindowContent = new Border { Child = SUT };
+
+			await WindowHelper.WaitForLoaded(SUT);
+			await WindowHelper.WaitForIdle();
+
+			var height = SUT.ActualHeight;
+
+			SUT.Text += "\r";
+
+			Assert.IsTrue(SUT.ActualHeight > height * 1.5);
+		}
+
+		[TestMethod]
+		[RunsOnUIThread]
 		public void When_Inlines_XamlRoot()
 		{
 			var SUT = new InlineTextInSpan();
@@ -118,6 +157,9 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 		[TestMethod]
 		[RunsOnUIThread]
+#if __MACOS__
+		[Ignore("Currently fails on macOS, part of #9282 epic")]
+#endif
 		public async Task When_FontFamily_In_Separate_Assembly()
 		{
 			var SUT = new TextBlock { Text = "\xE102\xE102\xE102\xE102\xE102" };
@@ -150,6 +192,9 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 		[TestMethod]
 		[RunsOnUIThread]
+#if __MACOS__
+		[Ignore("Currently fails on macOS, part of #9282 epic")]
+#endif
 		public async Task When_FontFamily_Default()
 		{
 			var SUT = new TextBlock { Text = "\xE102\xE102\xE102\xE102\xE102" };
@@ -232,13 +277,95 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				Foreground = new SolidColorBrush(Colors.Red) { Opacity = 0.5 },
 			};
 
-			WindowHelper.WindowContent = SUT;
-			await WindowHelper.WaitForIdle();
+			await UITestHelper.Load(SUT);
+			var bitmap = await UITestHelper.ScreenShot(SUT);
 
-			var renderer = new RenderTargetBitmap();
-			await renderer.RenderAsync(SUT);
-			var bitmap = await RawBitmap.From(renderer, SUT);
-			ImageAssert.HasColorInRectangle(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), Color.FromArgb(127, 127, 0, 0));
+			ImageAssert.HasColorInRectangle(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), Colors.Red.WithOpacity(.5));
+		}
+
+		[TestMethod]
+		[RunsOnUIThread]
+		public async Task When_Empty_TextBlock_Measure()
+		{
+			var container = new Grid()
+			{
+				Height = 200,
+				Width = 200,
+			};
+			var SUT = new TextBlock { Text = "" };
+			container.Children.Add(SUT);
+			WindowHelper.WindowContent = container;
+			await WindowHelper.WaitForLoaded(container);
+			await WindowHelper.WaitFor(() => SUT.DesiredSize != default);
+
+#if !__WASM__ // Disabled due to #14231
+			Assert.AreEqual(0, SUT.DesiredSize.Width);
+#endif
+			Assert.IsTrue(SUT.DesiredSize.Height > 0);
+		}
+
+#if !__IOS__ // Line height is not supported on iOS
+		[TestMethod]
+		[RunsOnUIThread]
+		public async Task When_Empty_TextBlock_LineHeight_Override()
+		{
+			var container = new Grid()
+			{
+				Height = 200,
+				Width = 200,
+			};
+			var SUT = new TextBlock { Text = "", LineHeight = 100 };
+			container.Children.Add(SUT);
+			WindowHelper.WindowContent = container;
+			await WindowHelper.WaitForLoaded(container);
+			await WindowHelper.WaitFor(() => SUT.DesiredSize != default);
+
+#if !__WASM__ // Disabled due to #14231
+			Assert.AreEqual(0, SUT.DesiredSize.Width);
+#endif
+			Assert.AreEqual(100, SUT.DesiredSize.Height);
+		}
+#endif
+
+		[TestMethod]
+		[RunsOnUIThread]
+		public async Task When_Empty_TextBlocks_Stacked()
+		{
+			var container = new StackPanel();
+			for (int i = 0; i < 3; i++)
+			{
+				container.Children.Add(new TextBlock { Text = "" });
+			}
+
+			container.Children.Add(new TextBlock { Text = "Some text" });
+
+			for (int i = 0; i < 3; i++)
+			{
+				container.Children.Add(new TextBlock { Text = "" });
+			}
+
+			WindowHelper.WindowContent = container;
+			await WindowHelper.WaitForLoaded(container);
+			foreach (var child in container.Children)
+			{
+				await WindowHelper.WaitFor(() => child.DesiredSize != default);
+			}
+
+			// Get the transform of the top left of the container
+			var previousTransform = container.TransformToVisual(null);
+			var previousOrigin = previousTransform.TransformPoint(new Point(0, 0));
+
+			for (int i = 1; i < container.Children.Count; i++)
+			{
+				// Get the same for SUT
+				var textBlockTransform = container.Children[i].TransformToVisual(null);
+				var textBlockOrigin = textBlockTransform.TransformPoint(new Point(0, 0));
+
+				Assert.AreEqual(previousOrigin.X, textBlockOrigin.X);
+				Assert.IsTrue(previousOrigin.Y < textBlockOrigin.Y);
+
+				previousOrigin = textBlockOrigin;
+			}
 		}
 	}
 }

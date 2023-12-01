@@ -1,3 +1,7 @@
+---
+uid: Uno.Development.FeatureFlags
+---
+
 # Configuring Uno's behavior globally
 
 Uno provides a set of feature flags that can be set early in an app's startup to control its behavior. Some of these flags are for backward compatibility, some of them provide fine-grained customizability of a particular feature, and some of them allow to toggle between more 'WinUI-like' and more 'native-like' behavior in a particular context.
@@ -94,3 +98,7 @@ Uno.UI.FeatureConfiguration.ToolTip.UseToolTips = true;
 ```
 
 It is also possible to adjust the delay in milliseconds (`Uno.UI.FeatureConfiguration.ToolTip.ShowDelay` - defaults to `1000`) and show duration in milliseconds (`Uno.UI.FeatureConfiguration.ToolTip.ShowDuration` - defaults to `5000`). This configuration only applies to Uno Platform targets. Windows App SDK/UWP will not adhere to this configuration.
+
+## `ApplicationData`
+
+On GTK and WPF it is possible to override the default `ApplicationData` folder locations using `WinRTFeatureConfiguration.ApplicationData` properties. For more information see [related docs here](/articles/features/applicationdata.md#data-location-on-gtk-and-wpf)

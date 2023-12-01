@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Windows.UI.Xaml.Controls;
+#if !HAS_UNO_WINUI
 using Microsoft.UI.Xaml.Controls;
+#endif
 using Common;
 using Windows.UI.Xaml.Markup;
 using Windows.UI.Xaml.Media;
@@ -18,9 +20,13 @@ using Windows.UI;
 namespace Uno.UI.RuntimeTests.MUX.Microsoft_UI_Xaml_Controls
 {
 	[TestClass]
+	[Uno.UI.RuntimeTests.RunsOnUIThread]
 	public class RadioButtonsTests : MUXApiTestBase
 	{
 		[TestMethod]
+#if __MACOS__
+		[Ignore("Currently fails on macOS, part of #9282 epic")]
+#endif
 		public void VerifyCustomItemTemplate()
 		{
 			RadioButtons radioButtons = null;

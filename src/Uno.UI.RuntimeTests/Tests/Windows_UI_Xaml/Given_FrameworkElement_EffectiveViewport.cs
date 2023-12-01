@@ -44,7 +44,11 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 			}
 		}
 #else
-		private Rect WindowBounds => new Rect(0, 0, Window.Current.Bounds.Width, Window.Current.Bounds.Height);
+		private Rect WindowBounds =>
+#if HAS_UNO
+			TestServices.WindowHelper.EmbeddedTestRoot.control?.XamlRoot?.Bounds ??
+#endif
+			Window.Current.Bounds;
 #endif
 
 		private Point RootLocation
@@ -54,7 +58,17 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 				var root = (FrameworkElement)WindowContent;
 				var windowBounds = WindowBounds;
 
-				return new Point(X(root, windowBounds.Width), Y(root, windowBounds.Height));
+				var x = X(root, windowBounds.Width);
+				var y = Y(root, windowBounds.Height);
+#if HAS_UNO // LayoutRound isn't public in UWP/WinUI. Ignore that block of code there for now.
+				if (root.UseLayoutRounding)
+				{
+					x = root.LayoutRound(x);
+					y = root.LayoutRound(y);
+				}
+#endif
+
+				return new Point(x, y);
 			}
 		}
 
@@ -251,7 +265,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 				HorizontalAlignment = hAlign,
 				VerticalAlignment = vAlign,
 				Width = width,
-				Height = height
+				Height = height,
 			};
 			using var vp = VP(sut);
 

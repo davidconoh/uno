@@ -7,7 +7,9 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Core;
 using System.Threading.Tasks;
 using Uno.UI;
-#if XAMARIN_IOS
+using Uno.UI.Xaml.Core;
+using Windows.Devices.Input;
+#if __IOS__
 using UIKit;
 #endif
 
@@ -45,13 +47,13 @@ namespace Windows.UI.Xaml.Controls.Primitives
 		private static readonly Stopwatch _chronometer = Stopwatch.StartNew();
 
 		/// <summary>
-		/// Delay time before setting the pressed state of an item to false, to allow time for the Pressed visual state to be drawn and perceived. 
+		/// Delay time before setting the pressed state of an item to false, to allow time for the Pressed visual state to be drawn and perceived.
 		/// </summary>
 		private static readonly TimeSpan MinTimeBetweenPressStates = TimeSpan.FromMilliseconds(100);
 
 		/// <summary>
-		/// Whether the SelectorItem will handle touches. This can be set to false for compatibility with controls where the parent 
-		/// handles touches (ComboBox-Android, legacy ListView/GridView). 
+		/// Whether the SelectorItem will handle touches. This can be set to false for compatibility with controls where the parent
+		/// handles touches (ComboBox-Android, legacy ListView/GridView).
 		/// </summary>
 		internal bool ShouldHandlePressed { get; set; } = true;
 
@@ -76,7 +78,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			AddHandler(ManipulationStartedEvent, _onManipulationStarted, handledEventsToo: true);
 		}
 
-		private Selector Selector => ItemsControl.ItemsControlFromItemContainer(this) as Selector;
+		private protected Selector Selector => ItemsControl.ItemsControlFromItemContainer(this) as Selector;
 
 		internal override UIElement VisualParent => Selector ?? base.VisualParent;
 
@@ -106,7 +108,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 		/// </summary>
 		internal void ApplyMultiSelectState(bool isSelectionMultiple)
 		{
-			if (isSelectionMultiple)
+			if (isSelectionMultiple && Selector is not ListViewBase { IsMultiSelectCheckBoxEnabled: false })
 			{
 				// We can safely always go to multiselect state
 				VisualStateManager.GoToState(this, "MultiSelectEnabled", useTransitions: true);
@@ -132,15 +134,15 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			Selector?.NotifyListItemSelected(this, oldIsSelected, newIsSelected);
 		}
 
-		private void UpdateCommonStatesWithoutNeedsLayout(ManipulationUpdateKind manipulationUpdate = ManipulationUpdateKind.None)
+		private void UpdateCommonStatesWithoutNeedsLayout(PointerDeviceType deviceType, ManipulationUpdateKind manipulationUpdate)
 		{
 			using (InterceptSetNeedsLayout())
 			{
-				UpdateCommonStates(manipulationUpdate);
+				UpdateCommonStates(deviceType == PointerDeviceType.Mouse, manipulationUpdate);
 			}
 		}
 
-		private void UpdateCommonStates(ManipulationUpdateKind manipulationUpdate = ManipulationUpdateKind.None)
+		private void UpdateCommonStates(bool isMouse = false, ManipulationUpdateKind manipulationUpdate = ManipulationUpdateKind.None)
 		{
 			// On Windows, the pressed state appears only after a few, and won't appear at all if you quickly start to scroll with the finger.
 			// So here we make sure to delay the beginning of a manipulation to match this behavior (and avoid flickering when scrolling)
@@ -156,7 +158,6 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			{
 				// When clicked (i.e. pointer released), but not yet in pressed state, we force to go immediately in pressed state
 				// Then we let the standard go to state process (i.e. with delay handling) reach the final expected state.
-
 				var pressedState = GetState(IsEnabled, IsSelected, IsPointerOver, isPressed: true);
 				_currentState = pressedState;
 				VisualStateManager.GoToState(this, pressedState, true);
@@ -169,7 +170,13 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			else if (manipulationUpdate == ManipulationUpdateKind.Begin)
 			{
 				// We delay the beginning of a manipulation to avoid flickers, but not for "exact" devices which has hover states
-				// (i.e. mouse and pen when not on iOS)
+				// (i.e. mouse when not on iOS)
+				if (isMouse)
+				{
+					_currentState = state;
+					VisualStateManager.GoToState(this, state, true);
+					return;
+				}
 
 				delay = MinTimeBetweenPressStates;
 				pause = true;
@@ -180,7 +187,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 				pause = false;
 			}
 
-			if (delay < TimeSpan.Zero)
+			if (delay <= TimeSpan.Zero)
 			{
 				_currentState = state;
 				VisualStateManager.GoToState(this, state, true);
@@ -254,6 +261,19 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			return state;
 		}
 
+		internal override void PrepareForRecycle()
+		{
+			// It's important to clear the index on the way out (recycle) and not wait to set it on the way in (reuse)
+			// because this property is used e.g. in ItemsControl.ContainerFromIndexInner which is used by e.g.
+			// ListView to get a clicked container.
+			ClearValue(ItemsControl.IndexForItemContainerProperty);
+
+			// Reset visual state so that the container doesn't come back looking like it's hovered or clicked.
+			VisualStateManager.GoToState(this, "Normal", false);
+
+			base.PrepareForRecycle();
+		}
+
 		private protected override void OnLoaded()
 		{
 			base.OnLoaded();
@@ -295,7 +315,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 		protected override void OnPointerEntered(PointerRoutedEventArgs args)
 		{
 			base.OnPointerEntered(args);
-			UpdateCommonStatesWithoutNeedsLayout(ManipulationUpdateKind.Begin);
+			UpdateCommonStatesWithoutNeedsLayout((Windows.Devices.Input.PointerDeviceType)args.Pointer.PointerDeviceType, ManipulationUpdateKind.Begin);
 		}
 
 		/// <inheritdoc />
@@ -316,7 +336,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			args.Handled = ShouldHandlePressed;
 
 			base.OnPointerPressed(args);
-			UpdateCommonStatesWithoutNeedsLayout(ManipulationUpdateKind.Begin);
+			UpdateCommonStatesWithoutNeedsLayout((Windows.Devices.Input.PointerDeviceType)args.Pointer.PointerDeviceType, ManipulationUpdateKind.Begin);
 		}
 
 		/// <inheritdoc />
@@ -331,7 +351,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 				_canRaiseClickOnPointerRelease = false;
 
 				update = ManipulationUpdateKind.Clicked;
-				Selector?.OnItemClicked(this);
+				Selector?.OnItemClicked(this, args.KeyModifiers);
 
 				// This should be automatically done by the pointers due to release, but if for any reason
 				// the state is invalid, this makes sure to not keep invalid capture longer than needed.
@@ -345,7 +365,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			args.Handled = ShouldHandlePressed;
 
 			base.OnPointerReleased(args);
-			UpdateCommonStatesWithoutNeedsLayout(update);
+			UpdateCommonStatesWithoutNeedsLayout((Windows.Devices.Input.PointerDeviceType)args.Pointer.PointerDeviceType, update);
 		}
 
 		/// <inheritdoc />
@@ -356,7 +376,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			ReleasePointerCapture(args.Pointer.UniqueId, kinds: PointerCaptureKind.Implicit);
 
 			base.OnPointerExited(args);
-			UpdateCommonStatesWithoutNeedsLayout(ManipulationUpdateKind.End);
+			UpdateCommonStatesWithoutNeedsLayout((Windows.Devices.Input.PointerDeviceType)args.Pointer.PointerDeviceType, ManipulationUpdateKind.End);
 		}
 
 		/// <inheritdoc />
@@ -365,7 +385,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			_canRaiseClickOnPointerRelease = false;
 
 			base.OnPointerCanceled(args);
-			UpdateCommonStatesWithoutNeedsLayout(ManipulationUpdateKind.End);
+			UpdateCommonStatesWithoutNeedsLayout((Windows.Devices.Input.PointerDeviceType)args.Pointer.PointerDeviceType, ManipulationUpdateKind.End);
 		}
 
 		/// <inheritdoc />
@@ -374,13 +394,19 @@ namespace Windows.UI.Xaml.Controls.Primitives
 			_canRaiseClickOnPointerRelease = false;
 
 			base.OnPointerCaptureLost(args);
-			UpdateCommonStatesWithoutNeedsLayout(ManipulationUpdateKind.End);
+			UpdateCommonStatesWithoutNeedsLayout((Windows.Devices.Input.PointerDeviceType)args.Pointer.PointerDeviceType, ManipulationUpdateKind.End);
 		}
 
 		protected override void OnGotFocus(RoutedEventArgs e)
 		{
 			base.OnGotFocus(e);
 			ChangeVisualState(true);
+
+			if (Selector is ListViewBase lvb)
+			{
+				var index = lvb.IndexFromContainer(this);
+				lvb.FocusedIndexContainerItem = (index, this, lvb.ItemFromIndex(index));
+			}
 		}
 
 		protected override void OnLostFocus(RoutedEventArgs e)

@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Tests.Enterprise;
 using Windows.UI.Core;
+using MUXControlsTestApp.Utilities;
 #if NETFX_CORE
 using Uno.UI.Extensions;
 #elif __IOS__
@@ -26,6 +27,10 @@ namespace Private.Infrastructure
 			private static Windows.UI.Xaml.Window _currentTestWindow;
 			private static UIElement _originalWindowContent;
 
+			public static XamlRoot XamlRoot { get; set; }
+
+			public static bool IsXamlIsland { get; set; }
+
 			public static Windows.UI.Xaml.Window CurrentTestWindow
 			{
 				get
@@ -44,13 +49,20 @@ namespace Private.Infrastructure
 			public static UIElement WindowContent
 			{
 				get => UseActualWindowRoot
-					? CurrentTestWindow.Content
+					? (IsXamlIsland ? GetXamlIslandRootContentControl().Content as UIElement : CurrentTestWindow.Content)
 					: EmbeddedTestRoot.getContent?.Invoke();
 				internal set
 				{
 					if (UseActualWindowRoot)
 					{
-						CurrentTestWindow.Content = value;
+						if (IsXamlIsland)
+						{
+							GetXamlIslandRootContentControl().Content = value;
+						}
+						else
+						{
+							CurrentTestWindow.Content = value;
+						}
 					}
 					else if (EmbeddedTestRoot.setContent is { } setter)
 					{
@@ -63,16 +75,41 @@ namespace Private.Infrastructure
 				}
 			}
 
+			private static ContentControl GetXamlIslandRootContentControl()
+			{
+				var islandContentRoot = EmbeddedTestRoot.control.XamlRoot.Content;
+				if (islandContentRoot is not ContentControl contentControl)
+				{
+					contentControl = VisualTreeUtils.FindVisualChildByType<ContentControl>(islandContentRoot);
+				}
+
+				return contentControl;
+			}
+
 			public static void SaveOriginalWindowContent()
 			{
-				_originalWindowContent = CurrentTestWindow.Content;
+				if (IsXamlIsland)
+				{
+					_originalWindowContent = GetXamlIslandRootContentControl().Content as UIElement;
+				}
+				else
+				{
+					_originalWindowContent = CurrentTestWindow.Content;
+				}
 			}
 
 			public static void RestoreOriginalWindowContent()
 			{
 				if (_originalWindowContent != null)
 				{
-					CurrentTestWindow.Content = _originalWindowContent;
+					if (IsXamlIsland)
+					{
+						GetXamlIslandRootContentControl().Content = _originalWindowContent;
+					}
+					else
+					{
+						CurrentTestWindow.Content = _originalWindowContent;
+					}
 					_originalWindowContent = null;
 				}
 			}
@@ -115,7 +152,7 @@ namespace Private.Infrastructure
 			/// This method assumes that the control will have a non-zero size once loaded, so it's not appropriate for elements that are
 			/// collapsed, empty, etc.
 			/// </remarks>
-			internal static async Task WaitForLoaded(FrameworkElement element)
+			internal static async Task WaitForLoaded(FrameworkElement element, int timeoutMS = 1000)
 			{
 				async Task Do()
 				{
@@ -140,7 +177,7 @@ namespace Private.Infrastructure
 						return true;
 					}
 
-					await WaitFor(IsLoaded, message: $"{element} loaded");
+					await WaitFor(IsLoaded, message: $"{element} loaded", timeoutMS: timeoutMS);
 				}
 #if __WASM__   // Adjust for re-layout failures in When_Inline_Items_SelectedIndex, When_Observable_ItemsSource_And_Added, When_Presenter_Doesnt_Take_Up_All_Space
 				await Do();

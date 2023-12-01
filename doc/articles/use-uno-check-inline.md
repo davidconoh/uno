@@ -1,17 +1,7 @@
-## Verify your developer environment
+---
+uid: Uno.Development.UnoCheck
+---
 
-# [**Windows**](#tab/windows)
+# Check your developer environment
 
-[!include[getting-help](use-uno-check-inline-windows-noheader.md)]
-
-# [**macOS**](#tab/macos)
-
-[!include[getting-help](use-uno-check-inline-macos-noheader.md)]
-
-# [**Linux**](#tab/linux)
-
-[!include[getting-help](use-uno-check-inline-linux-noheader.md)]
-
-***
-
-You can find additional information about [**uno-check here**](external/uno.check/doc/using-uno-check.md).
+[!include[getting-help](use-uno-check-inline-noheader.md)]

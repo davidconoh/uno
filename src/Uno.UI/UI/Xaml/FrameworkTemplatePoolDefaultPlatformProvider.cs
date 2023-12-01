@@ -31,7 +31,7 @@ class FrameworkTemplatePoolDefaultPlatformProvider : IFrameworkTemplatePoolPlatf
 	public TimeSpan Now
 		=> _watch.Elapsed;
 
-	public bool CanUseMemoryManager
+	public virtual bool CanUseMemoryManager
 		=> _canUseMemoryManager;
 
 	public ulong AppMemoryUsage
@@ -65,6 +65,6 @@ class FrameworkTemplatePoolDefaultPlatformProvider : IFrameworkTemplatePoolPlatf
 	public Task Delay(TimeSpan duration)
 		=> Task.Delay(duration);
 
-	public void Schedule(IdleDispatchedHandler action)
-		=> _ = CoreDispatcher.Main.RunIdleAsync(action);
+	public void Schedule(Action action)
+		=> NativeDispatcher.Main.Enqueue(action, NativeDispatcherPriority.Idle);
 }

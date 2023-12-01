@@ -1,3 +1,4 @@
+//#define USE_CUSTOM_LAYOUT_ATTRIBUTES (cf. VirtualizingPanelLayout.iOS.cs for more info)
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -24,23 +25,14 @@ using ObjCRuntime;
 
 using Uno.UI.UI.Xaml.Controls.Layouter;
 
-#if !NET6_0_OR_GREATER
-using NativeHandle = System.IntPtr;
-#endif
-
-#if XAMARIN_IOS_UNIFIED
 using Foundation;
 using UIKit;
 using CoreGraphics;
-#elif XAMARIN_IOS
-using MonoTouch.Foundation;
-using MonoTouch.UIKit;
-using MonoTouch.CoreGraphics;
-using CGRect = System.Drawing.RectangleF;
-using nfloat = System.Single;
-using CGPoint = System.Drawing.PointF;
-using nint = System.Int32;
-using CGSize = System.Drawing.SizeF;
+
+#if USE_CUSTOM_LAYOUT_ATTRIBUTES
+using _LayoutAttributes = Windows.UI.Xaml.Controls.UnoUICollectionViewLayoutAttributes;
+#else
+using _LayoutAttributes = UIKit.UICollectionViewLayoutAttributes;
 #endif
 
 namespace Windows.UI.Xaml.Controls
@@ -171,6 +163,13 @@ namespace Windows.UI.Xaml.Controls
 			{
 				key.IsDisplayed = false;
 
+				// Reset the parent that may have been set by
+				// GetBindableSupplementaryView for header and footer content
+				if (key.ElementKind == NativeListViewBase.ListViewFooterElementKindNS || key.ElementKind == NativeListViewBase.ListViewHeaderElementKindNS)
+				{
+					key.Content.SetParent(null);
+				}
+
 				if (_onRecycled.TryGetValue(key, out var actions))
 				{
 					foreach (var a in actions) { a(); }
@@ -247,11 +246,25 @@ namespace Windows.UI.Xaml.Controls
 						this.Log().Debug($"Reusing view at indexPath={indexPath}, previously bound to {selectorItem.DataContext}.");
 					}
 
+					// When reusing the cell there are situation when the parent is detached from the cell.
+					// https://github.com/unoplatform/uno/issues/13199
+					if (selectorItem.GetParent() is null)
+					{
+						selectorItem.SetParent(Owner.XamlParent);
+					}
+
 					Owner?.XamlParent?.PrepareContainerForIndex(selectorItem, index);
 
 					// Normally this happens when the SelectorItem.Content is set, but there's an edge case where after a refresh, a
 					// container can be dequeued which happens to have had exactly the same DataContext as the new item.
 					cell.ClearMeasuredSize();
+
+					// Ensure ClippedFrame from a previous recycled item doesn't persist which can happen in some cases,
+					// and cause it to be clipped when either axis was smaller.
+					if (cell.Content is { } contentControl)
+					{
+						contentControl.ClippedFrame = null;
+					}
 				}
 
 				Owner?.XamlParent?.TryLoadMoreItems(index);
@@ -378,6 +391,8 @@ namespace Windows.UI.Xaml.Controls
 				reuseIdentifier,
 				indexPath);
 
+			supplementaryView.ElementKind = elementKind;
+
 			using (supplementaryView.InterceptSetNeedsLayout())
 			{
 				if (supplementaryView.Content == null)
@@ -389,8 +404,28 @@ namespace Windows.UI.Xaml.Controls
 					supplementaryView.Content = content
 						.Binding("Content", "");
 				}
+
 				supplementaryView.Content.ContentTemplate = template;
-				supplementaryView.Content.DataContext = context;
+
+				if (elementKind == NativeListViewBase.ListViewFooterElementKindNS || elementKind == NativeListViewBase.ListViewHeaderElementKindNS)
+				{
+					supplementaryView.Content.SetParent(Owner.XamlParent);
+
+					if (context is not null)
+					{
+						supplementaryView.Content.Content = context;
+					}
+
+					// We need to reset the DataContext as it may have been forced to null as a local value
+					// during ItemsControl.CleanUpContainer
+					// See https://github.com/unoplatform/uno/blob/54041db0bd6d5049d8efab90b097eaca936bfca1/src/Uno.UI/UI/Xaml/Controls/ItemsControl/ItemsControl.cs#L1200
+					supplementaryView.Content.ClearValue(ContentControl.DataContextProperty);
+				}
+				else
+				{
+					supplementaryView.Content.DataContext = context;
+				}
+
 				if (style != null)
 				{
 					supplementaryView.Content.Style = style;
@@ -710,6 +745,8 @@ namespace Windows.UI.Xaml.Controls
 		private bool SupportsDynamicItemSizes => Owner.NativeLayout.SupportsDynamicItemSizes;
 		private ILayouter Layouter => Owner.NativeLayout.Layouter;
 
+		internal string ElementKind { get; set; }
+
 		protected override void Dispose(bool disposing)
 		{
 			if (!disposing)
@@ -846,9 +883,9 @@ namespace Windows.UI.Xaml.Controls
 		/// </summary>
 		internal void ClearMeasuredSize() => _measuredContentSize = null;
 
-		public override UICollectionViewLayoutAttributes PreferredLayoutAttributesFittingAttributes(UICollectionViewLayoutAttributes layoutAttributes)
+		public override UICollectionViewLayoutAttributes PreferredLayoutAttributesFittingAttributes(UICollectionViewLayoutAttributes nativeLayoutAttributes)
 		{
-			if (!(((object)layoutAttributes) is UICollectionViewLayoutAttributes))
+			if (((object)nativeLayoutAttributes) is not _LayoutAttributes layoutAttributes)
 			{
 				// This case happens for a yet unknown GC issue, where the layoutAttribute instance passed the current
 				// method maps to another object. The repro steps are not clear, and it may be related to ListView/GridView
@@ -920,6 +957,7 @@ namespace Windows.UI.Xaml.Controls
 							//to use stale layoutAttributes for deciding if items should be visible, leading to them popping out of view mid-viewport.
 							Owner?.NativeLayout?.RefreshLayout();
 						}
+
 						layoutAttributes.Frame = frame;
 						if (sizesAreDifferent)
 						{

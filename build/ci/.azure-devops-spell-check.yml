@@ -10,11 +10,12 @@ jobs:
 
   steps:
   - checkout: self
+    fetchDepth: 1
     clean: true
 
   - task: NodeTool@0
     inputs:
-      versionSpec: '16.x'
+      versionSpec: '18.x'
 
   - bash: npm install -g cspell
     displayName: Install cSpell

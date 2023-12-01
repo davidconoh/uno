@@ -5,6 +5,7 @@ using Uno.Foundation.Diagnostics.CodeAnalysis;
 
 [assembly: InternalsVisibleTo("Uno.UI.Foldable")]
 [assembly: InternalsVisibleTo("Uno.UI.Tests")]
+[assembly: InternalsVisibleTo("Uno.UI.Unit.Tests")]
 [assembly: InternalsVisibleTo("Uno.UI.Tests.Performance")]
 [assembly: InternalsVisibleTo("Uno.UI.Toolkit")]
 [assembly: InternalsVisibleTo("Uno.UI.RemoteControl")]
@@ -21,9 +22,12 @@ using Uno.Foundation.Diagnostics.CodeAnalysis;
 [assembly: InternalsVisibleTo("SamplesApp.macOS")]
 [assembly: InternalsVisibleTo("SamplesApp.Wasm")]
 [assembly: InternalsVisibleTo("SamplesApp.Skia")]
+[assembly: InternalsVisibleTo("UnoIslandsSamplesApp.Skia")]
 [assembly: InternalsVisibleTo("Uno.UI.FluentTheme")]
 [assembly: InternalsVisibleTo("Uno.UI.FluentTheme.v1")]
 [assembly: InternalsVisibleTo("Uno.UI.FluentTheme.v2")]
+[assembly: InternalsVisibleTo("Uno.UI.MediaPlayer.Skia.Gtk")]
+[assembly: InternalsVisibleTo("Uno.UI.MediaPlayer.WebAssembly")]
 
 [assembly: AssemblyMetadata("IsTrimmable", "True")]
 

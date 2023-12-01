@@ -1,14 +1,18 @@
+---
+uid: Uno.Development.FAQ
+---
+
 # FAQ
 
 ## About Uno Platform
 
 #### What is the Uno Platform?
 
-Uno Platform is a cross-platform application framework which lets you write an application once in XAML and C#, and deploy it to [any target platform](getting-started/requirements.md). Read more [here](what-is-uno.md).
+Uno Platform lets you write an application once in XAML and/or C#, and deploy it to [any target platform](getting-started/requirements.md). Read more [here](what-is-uno.md).
 
 #### Who makes Uno Platform?
 
-Uno Platform is an [open-source project](https://github.com/unoplatform/Uno) with many contributors. It was developed internally by [nventive](https://nventive.com) from 2013-2018, and has been open source since 2018. It's maintained by [nventive](https://nventive.com).
+Uno Platform is an [open-source project](https://github.com/unoplatform/Uno) with many contributors. It was developed internally by [nventive](https://nventive.com) from 2013-2018, and has been open source since 2018. It's maintained by [Uno Platform](https://platform.uno).
 
 #### Where can I get support?
 Support is available through [GitHub Discussions](https://github.com/unoplatform/uno/discussions) or [Discord](https://www.platform.uno/discord) - #uno-platform channel where our engineering team and community will be able to help you.

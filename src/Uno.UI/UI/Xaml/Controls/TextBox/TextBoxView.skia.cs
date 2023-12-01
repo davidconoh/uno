@@ -1,12 +1,12 @@
 ﻿#nullable enable
 
 using System;
-
 using Uno.Extensions;
 using Uno.Foundation.Extensibility;
 using Uno.Foundation.Logging;
 using Uno.UI.Xaml.Controls.Extensions;
 using Windows.UI.Xaml.Media;
+using Uno.UI;
 
 namespace Windows.UI.Xaml.Controls
 {
@@ -20,9 +20,12 @@ namespace Windows.UI.Xaml.Controls
 
 		public TextBoxView(TextBox textBox)
 		{
+			DisplayBlock = new TextBlock();
+			SetFlowDirectionAndTextAlignment();
+
 			_textBox = new WeakReference<TextBox>(textBox);
 			_isPasswordBox = textBox is PasswordBox;
-			if (!ApiExtensibility.CreateInstance(this, out _textBoxExtension))
+			if (FeatureConfiguration.TextBox.UseOverlayOnSkia && !ApiExtensibility.CreateInstance(this, out _textBoxExtension))
 			{
 				if (this.Log().IsEnabled(LogLevel.Warning))
 				{
@@ -32,6 +35,9 @@ namespace Windows.UI.Xaml.Controls
 				}
 			}
 		}
+
+		public (int start, int length) SelectionBeforeKeyDown =>
+			(_textBoxExtension?.GetSelectionStartBeforeKeyDown() ?? 0, _textBoxExtension?.GetSelectionLengthBeforeKeyDown() ?? 0);
 
 		internal IOverlayTextBoxViewExtension? Extension => _textBoxExtension;
 
@@ -51,7 +57,7 @@ namespace Windows.UI.Xaml.Controls
 
 		internal int GetSelectionLength() => _textBoxExtension?.GetSelectionLength() ?? 0;
 
-		public TextBlock DisplayBlock { get; } = new TextBlock();
+		public TextBlock DisplayBlock { get; }
 
 		internal void SetTextNative(string text)
 		{
@@ -63,6 +69,37 @@ namespace Windows.UI.Xaml.Controls
 		internal void Select(int start, int length)
 		{
 			_textBoxExtension?.Select(start, length);
+		}
+
+		internal void SetFlowDirectionAndTextAlignment()
+		{
+			if (_textBox?.GetTarget() is not { } textBox)
+			{
+				return;
+			}
+
+			var flowDirection = textBox.FlowDirection;
+			var textAlignment = textBox.TextAlignment;
+			if (flowDirection == FlowDirection.RightToLeft)
+			{
+				textAlignment = textAlignment switch
+				{
+					TextAlignment.Left => TextAlignment.Right,
+					TextAlignment.Right => TextAlignment.Left,
+					_ => textAlignment,
+				};
+			}
+
+			DisplayBlock.FlowDirection = flowDirection;
+			DisplayBlock.TextAlignment = textAlignment;
+		}
+
+		internal void SetWrapping()
+		{
+			if (_textBox?.GetTarget() is { } textBox)
+			{
+				DisplayBlock.TextWrapping = textBox.TextWrapping;
+			}
 		}
 
 		internal void OnForegroundChanged(Brush brush)
@@ -79,6 +116,11 @@ namespace Windows.UI.Xaml.Controls
 
 		internal void OnFocusStateChanged(FocusState focusState)
 		{
+			if (!FeatureConfiguration.TextBox.UseOverlayOnSkia)
+			{
+				return;
+			}
+
 			if (focusState != FocusState.Unfocused)
 			{
 				DisplayBlock.Opacity = 0;
@@ -98,6 +140,20 @@ namespace Windows.UI.Xaml.Controls
 				_textBoxExtension?.EndEntry();
 				DisplayBlock.Opacity = 1;
 			}
+		}
+
+		internal void UpdateFont()
+		{
+			var textBox = _textBox?.GetTarget();
+			if (textBox != null)
+			{
+				DisplayBlock.FontFamily = textBox.FontFamily;
+				DisplayBlock.FontSize = textBox.FontSize;
+				DisplayBlock.FontStyle = textBox.FontStyle;
+				DisplayBlock.FontStretch = textBox.FontStretch;
+				DisplayBlock.FontWeight = textBox.FontWeight;
+			}
+			// TODO: Propagate font family to the native InputWidget via _textBoxExtension.
 		}
 
 		internal void SetPasswordRevealState(PasswordRevealState revealState)
@@ -134,6 +190,18 @@ namespace Windows.UI.Xaml.Controls
 			else
 			{
 				DisplayBlock.Text = text;
+
+				if (text.EndsWith('\r'))
+				{
+					// this works around a bug in TextBlock where the last newline is not shown
+					DisplayBlock.Text += '\r';
+				}
+			}
+
+			if (!FeatureConfiguration.TextBox.UseOverlayOnSkia)
+			{
+				TextBox?.ContentElement?.InvalidateMeasure();
+				TextBox?.UpdateLayout();
 			}
 		}
 	}

@@ -4,6 +4,7 @@ using Windows.UI.Xaml.Input;
 using Windows.System;
 using System;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -11,10 +12,7 @@ using Uno.UI.Extensions;
 using AppKit;
 using CoreAnimation;
 using CoreGraphics;
-
-#if NET6_0_OR_GREATER
 using ObjCRuntime;
-#endif
 
 namespace Windows.UI.Xaml
 {
@@ -118,11 +116,7 @@ namespace Windows.UI.Xaml
 
 		internal Windows.Foundation.Point GetPosition(Point position, global::Windows.UI.Xaml.UIElement relativeTo)
 		{
-#if __IOS__
-			return relativeTo.ConvertPointToCoordinateSpace(position, relativeTo);
-#elif __MACOS__
 			throw new NotImplementedException();
-#endif
 		}
 
 		/// <inheritdoc />
@@ -137,7 +131,7 @@ namespace Windows.UI.Xaml
 
 		private protected override void OnNativeKeyDown(NSEvent evt)
 		{
-			var args = new KeyRoutedEventArgs(this, VirtualKeyHelper.FromKeyCode(evt.KeyCode))
+			var args = new KeyRoutedEventArgs(this, VirtualKeyHelper.FromKeyCode(evt.KeyCode), VirtualKeyHelper.FromFlagsToVirtualModifiers(evt.ModifierFlags))
 			{
 				CanBubbleNatively = false // Only the first responder gets the event
 			};
@@ -152,11 +146,12 @@ namespace Windows.UI.Xaml
 		private protected override void OnNativeFlagsChanged(NSEvent evt)
 		{
 			var newFlags = evt.ModifierFlags;
+			var modifiers = VirtualKeyHelper.FromFlagsToVirtualModifiers(newFlags);
 
 			var flags = Enum.GetValues(typeof(NSEventModifierMask)).OfType<NSEventModifierMask>();
 			foreach (var flag in flags)
 			{
-				var key = VirtualKeyHelper.FromFlags(flag);
+				var key = VirtualKeyHelper.FromFlagsToKey(flag);
 				if (key == null)
 				{
 					continue;
@@ -167,7 +162,7 @@ namespace Windows.UI.Xaml
 
 				if (raiseKeyDown || raiseKeyUp)
 				{
-					var args = new KeyRoutedEventArgs(this, key.Value)
+					var args = new KeyRoutedEventArgs(this, key.Value, modifiers)
 					{
 						CanBubbleNatively = false // Only the first responder gets the event
 					};
@@ -191,7 +186,7 @@ namespace Windows.UI.Xaml
 
 		private bool CheckFlagKeyDown(NSEventModifierMask flag, NSEventModifierMask newMask) => !_lastFlags.HasFlag(flag) && newMask.HasFlag(flag);
 
-		private bool TryGetParentUIElementForTransformToVisual(out UIElement parentElement, ref double offsetX, ref double offsetY)
+		private bool TryGetParentUIElementForTransformToVisual(out UIElement parentElement, ref Matrix3x2 matrix)
 		{
 			var parent = this.GetVisualTreeParent();
 			switch (parent)
@@ -220,8 +215,8 @@ namespace Windows.UI.Xaml
 								var offset = view?.ConvertPointToView(default, eltParent) ?? default;
 
 								parentElement = eltParent;
-								offsetX += offset.X;
-								offsetY += offset.Y;
+								matrix.M31 += (float)offset.X;
+								matrix.M32 += (float)offset.Y;
 								return true;
 
 							case null:
@@ -231,8 +226,8 @@ namespace Windows.UI.Xaml
 								offset = view.ConvertRectToView(default, null).Location;
 
 								parentElement = null;
-								offsetX += offset.X;
-								offsetY += offset.Y;
+								matrix.M31 += (float)offset.X;
+								matrix.M32 += (float)offset.Y;
 								return false;
 						}
 					} while (true);
@@ -241,7 +236,7 @@ namespace Windows.UI.Xaml
 
 		private protected override void OnNativeKeyUp(NSEvent evt)
 		{
-			var args = new KeyRoutedEventArgs(this, VirtualKeyHelper.FromKeyCode(evt.KeyCode))
+			var args = new KeyRoutedEventArgs(this, VirtualKeyHelper.FromKeyCode(evt.KeyCode), VirtualKeyHelper.FromFlagsToVirtualModifiers(evt.ModifierFlags))
 			{
 				CanBubbleNatively = false // Only the first responder gets the event
 			};

@@ -1,11 +1,7 @@
-﻿<Project Sdk="MSBuild.Sdk.Extras" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>netstandard2.0</TargetFrameworks>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(MSBuildRuntimeType)'=='Core' or '$(IsRunningInsideVisualStudio)'=='true'">
-		<TargetFrameworks>$(TargetFrameworks);net7.0</TargetFrameworks>
+		<TargetFrameworks>$(NetReferencePreviousAndCurrent)</TargetFrameworks>
 	</PropertyGroup>
 
 	<Import Project="../targetframework-override.props" />
@@ -21,20 +17,18 @@
 
 		<Nullable>enable</Nullable>
 
-		<PackageId>Uno.UI.RemoteControl</PackageId>
-		<PackageId Condition="'$(UNO_UWP_BUILD)'=='false'">Uno.WinUI.RemoteControl</PackageId>
+		<PackageId>Uno.UI.DevServer</PackageId>
+		<PackageId Condition="'$(UNO_UWP_BUILD)'=='false'">Uno.WinUI.DevServer</PackageId>
 
 		<UnoRuntimeIdentifier>Reference</UnoRuntimeIdentifier>
 	</PropertyGroup>
-
-	<Import Project="..\Uno.CrossTargetting.props" />
 
 	<ItemGroup>
 		<UpToDateCheckInput Include="**\*.cs" Exclude="bin\**\*.cs;obj\**\*.cs;" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Content Include="buildTransitive\Uno.UI.RemoteControl.targets">
+	  <Content Include="buildTransitive\Uno.UI.DevServer.targets">
 	    <PackagePath>build</PackagePath>
 	    <Pack>true</Pack>
 	  </Content>
@@ -47,6 +41,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Uno.Foundation\Uno.Foundation.Reference.csproj" />
+		<ProjectReference Include="..\Uno.UI.RemoteControl.Messaging\Uno.UI.RemoteControl.Messaging.csproj" />
 		<ProjectReference Include="..\Uno.UWP\Uno.Reference.csproj" />
 		<ProjectReference Include="..\Uno.UI\Uno.UI.Reference.csproj" />
 	</ItemGroup>
@@ -71,9 +66,7 @@
 
 		<PropertyGroup>
 			<_OverrideTargetFramework>$(TargetFramework)</_OverrideTargetFramework>
-			<_baseNugetPath Condition="'$(USERPROFILE)'!=''">$(USERPROFILE)</_baseNugetPath>
-			<_baseNugetPath Condition="'$(HOME)'!=''">$(HOME)</_baseNugetPath>
-			<_TargetNugetFolder>$(_baseNugetPath)\.nuget\packages\uno.ui\$(UnoNugetOverrideVersion)\lib\$(_OverrideTargetFramework)</_TargetNugetFolder>
+			<_TargetNugetFolder>$(NuGetPackageRoot)\$(PackageId)\$(UnoNugetOverrideVersion)\lib\$(_OverrideTargetFramework)</_TargetNugetFolder>
 		</PropertyGroup>
 		<ItemGroup>
 			<_OutputFiles Include="$(TargetDir)\*.*" />

@@ -1,3 +1,7 @@
+---
+uid: Uno.Contributing.SamplesApp
+---
+
 # Using the SamplesApp
 
 The SamplesApp in Uno.UI is an Uno application containing a large number of UI and non-UI samples. It serves a few purposes:
@@ -17,7 +21,7 @@ The SamplesApp from latest master branch for WebAssembly is available online: ht
 
 To run the SamplesApp locally:
 
-1. Ensure [your environment is configured](../get-started-vs.md) for the platform you want to run on.
+1. Ensure [your environment is configured](xref:Uno.GetStarted.vs2022) for the platform you want to run on.
 2. Open Uno.UI with the [correct target override and solution filter](building-uno-ui.md) for the platform you want to run on.
 3. Select `SamplesApp.[Platform]` as the startup app. (Eg, `SamplesApp.iOS` if you're running on iOS.)
 4. If you're testing on a mobile platform, use a tablet if possible, as the app is optimized for a tablet layout.
@@ -26,6 +30,10 @@ To run the SamplesApp locally:
 If everything builds successfully, the app will run. The app is a collection of samples, grouped into categories. You can navigate to a sample using the menu on the left.
 
 ![SamplesApp main view](assets/SamplesApp.png)
+
+### Running-debugging the WebAssembly app on a mobile device
+
+By default, SamplesApp starts in debugging mode on localhost, making it inaccessible from external devices, even if they are on the same network. To remedy this, you can utilize Visual Studio 2022 Dev Tunnels to establish an externally accessible URL for your application. For more details, refer to the [Microsoft Learn documentation](https://learn.microsoft.com/aspnet/core/test/dev-tunnels). If the option doesn't appear initially, consider running a rebuild of the `SamplesApp.Wasm` project.
 
 ## Sample organization
 

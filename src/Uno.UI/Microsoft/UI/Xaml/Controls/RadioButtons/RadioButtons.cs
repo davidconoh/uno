@@ -75,6 +75,7 @@ namespace Microsoft.UI.Xaml.Controls
 					repeater.ElementClearing += OnRepeaterElementClearing;
 					repeater.ElementIndexChanged += OnRepeaterElementIndexChanged;
 					repeater.Loaded += OnRepeaterLoaded;
+					repeater.Unloaded += OnRepeaterUnloaded;
 					return repeater;
 				}
 				return null;
@@ -509,7 +510,7 @@ namespace Microsoft.UI.Xaml.Controls
 			var repeater = m_repeater;
 			if (repeater != null)
 			{
-				var focusedElement = FocusManager.GetFocusedElement() as UIElement;
+				var focusedElement = FocusManager.GetFocusedElement(XamlRoot) as UIElement;
 				if (focusedElement != null)
 				{
 					var focusedIndex = repeater.GetElementIndex(focusedElement);
@@ -664,7 +665,7 @@ namespace Microsoft.UI.Xaml.Controls
 			}
 		}
 
-		~RadioButtons()
+		private void OnRepeaterUnloaded(object sender, RoutedEventArgs args)
 		{
 			var layout = GetLayout();
 			if (layout != null)

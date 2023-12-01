@@ -15,6 +15,8 @@ namespace Windows.UI.Xaml.Media.Animation
 	public partial class DoubleAnimationUsingKeyFrames : Timeline, ITimeline
 	{
 		private readonly Stopwatch _activeDuration = new Stopwatch();
+		private bool _wasBeginScheduled;
+		private bool _wasRequestedToStop;
 		private int _replayCount = 1;
 		private double? _startingValue;
 		private double _finalValue;
@@ -55,7 +57,6 @@ namespace Windows.UI.Xaml.Media.Animation
 			return base.GetCalculatedDuration();
 		}
 
-		bool _wasBeginScheduled;
 		void ITimeline.Begin()
 		{
 			if (!_wasBeginScheduled)
@@ -63,8 +64,11 @@ namespace Windows.UI.Xaml.Media.Animation
 				// We dispatch the begin so that we can use bindings on DoubleKeyFrame.Value from RelativeParent.
 				// This works because the template bindings are executed just after the constructor.
 				// WARNING: This does not allow us to bind DoubleKeyFrame.Value with ViewModel properties.
+
 				_wasBeginScheduled = true;
-#if !NET461
+				_wasRequestedToStop = false;
+
+#if !IS_UNIT_TESTS
 #if __ANDROID__
 				_ = Dispatcher.RunAnimation(() =>
 #else
@@ -72,11 +76,14 @@ namespace Windows.UI.Xaml.Media.Animation
 #endif
 #endif
 				{
-					if (KeyFrames.Count < 1)
-					{
-						return; // nothing to do
-					}
 					_wasBeginScheduled = false;
+
+					if (KeyFrames.Count < 1 || // nothing to do
+						_wasRequestedToStop // was requested to stop, between Begin() and dispatched here
+					)
+					{
+						return;
+					}
 
 					_activeDuration.Restart();
 					_replayCount = 1;
@@ -84,7 +91,7 @@ namespace Windows.UI.Xaml.Media.Animation
 					//Start the animation
 					Play();
 				}
-#if !NET461
+#if !IS_UNIT_TESTS
 				);
 #endif
 			}
@@ -175,7 +182,9 @@ namespace Windows.UI.Xaml.Media.Animation
 				_currentAnimator.Cancel();//Stop the animator if it is running
 				_startingValue = null;
 			}
+
 			State = TimelineState.Stopped;
+			_wasRequestedToStop = true;
 		}
 
 		void ITimeline.Stop()
@@ -183,7 +192,9 @@ namespace Windows.UI.Xaml.Media.Animation
 			_currentAnimator?.Cancel(); // stop could be called before the initialization
 			_startingValue = null;
 			ClearValue();
+
 			State = TimelineState.Stopped;
+			_wasRequestedToStop = true;
 		}
 
 		/// <summary>
@@ -255,7 +266,7 @@ namespace Windows.UI.Xaml.Media.Animation
 
 				var i = index;
 
-#if __ANDROID_19__
+#if __ANDROID__
 				if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.Kitkat)
 				{
 					animator.AnimationPause += (a, _) => OnFrame((IValueAnimator)a);
@@ -342,7 +353,7 @@ namespace Windows.UI.Xaml.Media.Animation
 		/// <summary>
 		/// Dispose the Double animation.
 		/// </summary>
-		protected override void Dispose(bool disposing)
+		private protected override void Dispose(bool disposing)
 		{
 			if (disposing)
 			{
@@ -359,7 +370,7 @@ namespace Windows.UI.Xaml.Media.Animation
 		partial void UseHardware();
 		partial void HoldValue();
 
-#if NET461
+#if IS_UNIT_TESTS
 		private bool ReportEachFrame() => true;
 #endif
 	}

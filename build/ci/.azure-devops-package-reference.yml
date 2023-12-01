@@ -3,12 +3,9 @@ parameters:
 
 jobs:
 - job: reference_package_build
-  displayName: 'Build Reference Package Binaries'
+  displayName: 'Reference Package Binaries'
 
-  dependsOn: winui_convert_tree
-
-  pool:
-    vmImage: ${{ parameters.vmImage }}
+  pool: ${{ parameters.poolName }}
 
   strategy:
     matrix:
@@ -36,6 +33,11 @@ jobs:
       nugetPackages: $(NUGET_PACKAGES)
 
   - template: templates/gitversion.yml
+
+  - script: |
+      cp global.json global-net7.json
+      cp global-net8.json global.json
+    displayName: Replace global.json with .NET 8
 
   - template: templates/dotnet-install.yml
 

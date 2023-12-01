@@ -16,20 +16,21 @@ namespace Windows.UI.Xaml.Documents
 			PointerPressed += TextBlock.OnPointerPressed;
 			PointerReleased += TextBlock.OnPointerReleased;
 			PointerCaptureLost += TextBlock.OnPointerCaptureLost;
-			ResourceResolver.ApplyResource(this, Hyperlink.ForegroundProperty, "SystemControlHyperlinkTextBrush", isThemeResourceExtension: true);
-
+			OnUnderlineStyleChanged();
 		}
 
 		#region NavigationTarget DependencyProperty
 		private const NavigationTarget _defaultNavigationTarget = NavigationTarget.NewDocument;
 
-		public NavigationTarget NavigationTarget
+		// TODO: This was changed from public to internal. We need a way to expose it.
+		// See https://github.com/unoplatform/uno/issues/14074 for info.
+		internal NavigationTarget NavigationTarget
 		{
 			get => (NavigationTarget)GetValue(NavigationTargetProperty);
 			set => SetValue(NavigationTargetProperty, value);
 		}
 
-		public static DependencyProperty NavigationTargetProperty { get; } = DependencyProperty.Register(
+		internal static DependencyProperty NavigationTargetProperty { get; } = DependencyProperty.Register(
 			"NavigationTarget",
 			typeof(NavigationTarget),
 			typeof(Hyperlink),

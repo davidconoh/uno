@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See LICENSE in the project root for license information.
-// MUX Reference AnimatedIconSource.cpp, commit f4d781d
+
+// MUX Reference AnimatedIconSource.cpp & AnimatedIconSource.properties.cpp, tag winui3/release/1.4.2
 
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -36,7 +37,10 @@ namespace Microsoft.UI.Xaml.Controls
 		public static DependencyProperty SourceProperty { get; } =
 			DependencyProperty.Register(nameof(Source), typeof(IAnimatedVisualSource2), typeof(AnimatedIconSource), new FrameworkPropertyMetadata(null, OnPropertyChanged));
 
-		private protected override IconElement CreateIconElementCore()
+#if !HAS_UNO_WINUI
+		private
+#endif
+		protected override IconElement CreateIconElementCore()
 		{
 			AnimatedIcon animatedIcon = new AnimatedIcon();
 			if (Source is { } source)
@@ -56,23 +60,25 @@ namespace Microsoft.UI.Xaml.Controls
 			return animatedIcon;
 		}
 
-		private protected override DependencyProperty GetIconElementPropertyCore(DependencyProperty sourceProperty)
+#if !HAS_UNO_WINUI
+		private
+#endif
+		protected override DependencyProperty GetIconElementPropertyCore(DependencyProperty iconSourceProperty)
 		{
-			if (sourceProperty == SourceProperty)
+			if (iconSourceProperty == SourceProperty)
 			{
 				return AnimatedIcon.SourceProperty;
 			}
-			else if (sourceProperty == FallbackIconSourceProperty)
+			else if (iconSourceProperty == FallbackIconSourceProperty)
 			{
 				return AnimatedIcon.FallbackIconSourceProperty;
 			}
-			else if (sourceProperty == MirroredWhenRightToLeftProperty)
+			else if (iconSourceProperty == MirroredWhenRightToLeftProperty)
 			{
 				return AnimatedIcon.MirroredWhenRightToLeftProperty;
 			}
 
-			return base.GetIconElementPropertyCore(sourceProperty);
+			return base.GetIconElementPropertyCore(iconSourceProperty);
 		}
-
 	}
 }

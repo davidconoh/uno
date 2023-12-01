@@ -2,9 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace UnoWinUIRevert
 {
@@ -19,6 +17,7 @@ namespace UnoWinUIRevert
 			DeleteFolder(Path.Combine(basePath, "src", "Uno.UWP", "Generated"));
 			DeleteFolder(Path.Combine(basePath, "src", "Uno.UI", "tsBindings")); // Generated
 			DeleteFolder(Path.Combine(basePath, "src", "Uno.UI", "UI", "Xaml", "Controls", "ProgressBar")); // ProgressBar in WinUI is a replacement of the UWP's version
+			DeleteFolder(Path.Combine(basePath, "src", "Uno.UI", "UI", "Xaml", "Controls", "NavigationView")); // NavigationView in WinUI is a replacement of the UWP's version
 
 			var colorsFilepath = Path.Combine(basePath, @"src", "Uno.UWP", "UI", "Colors.cs");
 			if (File.Exists(colorsFilepath))
@@ -70,24 +69,17 @@ namespace UnoWinUIRevert
 			}
 
 			// Files/Class that are implemented in both MUX and WUX and which should not be converted
+			Directory.Delete(Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported"), recursive: true);
 			var duplicatedImplementations = new[]
 			{
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icon\BitmapIconSource.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icon\SymbolIconSource.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icon\PathIconSource.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icon\FontIconSource.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icon\IconSource.cs"),
+				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icons\BitmapIconSource.cs"),
+				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icons\SymbolIconSource.cs"),
+				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icons\PathIconSource.cs"),
+				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icons\FontIconSource.cs"),
+				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Icons\IconSource.cs"),
+				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Media\RevealBrush.Android.cs"),
 				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\RatingControl.cs"),
 				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Automation\Peers\RatingControlAutomationPeer.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\SplitButton.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\SplitButtonAutomationPeer.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\ToggleSplitButton.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\ToggleSplitButtonAutomationPeer.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\TreeView.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\TwoPaneView.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\ColorPicker.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\RefreshContainer.cs"),
-				Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Controls\Unsupported\RefreshVisualizer.cs"),
 			};
 			DeleteFiles(duplicatedImplementations);
 
@@ -119,6 +111,13 @@ namespace UnoWinUIRevert
 			// Restore DualPaneView XAML
 			// ReplaceInFile(Path.Combine(basePath, @"src\Uno.UI\Microsoft\UI\Xaml\Controls\TwoPaneView\TwoPaneView.xaml"), "using:Windows.UI.Xaml.Controls", "using:Windows.UI.Xaml.Controls");
 
+			// Adjust lottie namespace
+			var lottieReplacements = new[]
+			{
+				("Microsoft.Toolkit.Uwp.UI.Lottie", "CommunityToolkit.WinUI.Lottie"),
+			};
+			ReplaceInFolders(Path.Combine(basePath, "src", "SamplesApp", "UITests.Shared"), lottieReplacements, "*.xaml");
+
 			// Adjust Colors
 			ReplaceInFile(Path.Combine(basePath, @"src", "Uno.UI", "UI", "Colors.cs"), "Windows.UI", "Microsoft.UI");
 			ReplaceInFile(Path.Combine(basePath, @"src", "Uno.UI", "UI", "ColorHelper.cs"), "Windows.UI", "Microsoft.UI");
@@ -139,6 +138,18 @@ namespace UnoWinUIRevert
 			//ReplaceInFile(Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Media\RadialGradientBrush.cs"), "namespace Windows.UI.Xaml.Controls", "namespace Windows.UI.Xaml.Controls");
 			//ReplaceInFile(Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Media\RadialGradientBrush.iOSmacOS.cs"), "namespace Windows.UI.Xaml.Controls", "namespace Windows.UI.Xaml.Controls");
 			//ReplaceInFile(Path.Combine(basePath, @"src\Uno.UI\UI\Xaml\Media\RadialGradientBrush.wasm.cs"), "namespace Windows.UI.Xaml.Controls", "namespace Windows.UI.Xaml.Controls");
+
+			// Replacements for nuspec files
+			string[] nuspecTransformedFiles = new[]{
+				Path.Combine(basePath, "build", "nuget", "Uno.WinUI.nuspec"),
+				Path.Combine(basePath, "build", "nuget", "Uno.WinUI.MSAL.nuspec"),
+			};
+
+			foreach (var nuspecTransformedFile in nuspecTransformedFiles)
+			{
+				UncommentWinUISpecificBlock(nuspecTransformedFile);
+				CommentUWPSpecificBlock(nuspecTransformedFile);
+			}
 		}
 
 		static string[] _exclusions = new string[] {
@@ -153,6 +164,7 @@ namespace UnoWinUIRevert
 			@"\bin\",
 			@"\.git",
 			@"\.vs",
+			@"\docs\",
 		}
 		.Select(AlignPath)
 		.ToArray();
@@ -163,27 +175,23 @@ namespace UnoWinUIRevert
 		{
 			foreach (var file in Directory.EnumerateFiles(basePath, searchPattern, SearchOption.AllDirectories))
 			{
-				if (_exclusions.Any(e => file.Contains(e, StringComparison.OrdinalIgnoreCase)))
+				if (_exclusions.Any(e => file.Contains(e, StringComparison.Ordinal)))
 				{
 					continue;
 				}
 
-				var updated = false;
-				var content = File.ReadAllText(file);
+				var originalContent = File.ReadAllText(file);
+				var updatedContent = originalContent;
 
 				for (int i = 0; i < replacements.Length; i++)
 				{
-					if (content.Contains(replacements[i].from))
-					{
-						content = content.Replace(replacements[i].from, replacements[i].to);
-						updated = true;
-					}
+					updatedContent = updatedContent.Replace(replacements[i].from, replacements[i].to);
 				}
 
-				if (updated)
+				if (!object.ReferenceEquals(originalContent, updatedContent))
 				{
 					Console.WriteLine($"Updating [{file}]");
-					File.WriteAllText(file, content, Encoding.UTF8);
+					File.WriteAllText(file, updatedContent, Encoding.UTF8);
 				}
 			}
 		}
@@ -215,6 +223,18 @@ namespace UnoWinUIRevert
 					File.Delete(filePath);
 				}
 			}
+		}
+
+		private static void UncommentWinUISpecificBlock(string nuspecPath)
+		{
+			ReplaceInFile(nuspecPath, @"<!-- BEGIN WinUI-specific", string.Empty);
+			ReplaceInFile(nuspecPath, @"END WinUI-specific -->", string.Empty);
+		}
+
+		private static void CommentUWPSpecificBlock(string nuspecPath)
+		{
+			ReplaceInFile(nuspecPath, @"<!-- BEGIN UWP-specific -->", "<!--");
+			ReplaceInFile(nuspecPath, @"<!-- END UWP-specific -->", "-->");
 		}
 	}
 }

@@ -1,18 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net6.0-android;net6.0-ios</TargetFrameworks>
-		<TargetFrameworks>$(TargetFrameworks);net6.0-maccatalyst;net6.0-macos</TargetFrameworks>
-
-		<TargetFrameworks>$(TargetFrameworks);net7.0-android;net7.0-ios</TargetFrameworks>
-		<TargetFrameworks>$(TargetFrameworks);net7.0-maccatalyst;net7.0-macos</TargetFrameworks>
-
-		<!--
-			Set to false as a temporary workaround for:
-			mergedstyles_071591b3676f22ac4e4712a47cc7d18f.cs(1466,14): error CS1029: #error: 'Property for contract7Present:CornerRadius cannot be found on Windows.UI.Xaml.Controls.Button' [/Users/runner/work/1/s/src/Uno.UI/Uno.UI.netcoremobile.csproj::TargetFramework=net6.0-android]
-			Remove this workaround when fixing https://github.com/unoplatform/uno/issues/10596
-		-->
-		<ShouldWriteErrorOnInvalidXaml>false</ShouldWriteErrorOnInvalidXaml>
+		<TargetFrameworks>$(NetMobilePreviousAndCurrent)</TargetFrameworks>
 	</PropertyGroup>
 
 	<Import Project="../targetframework-override.props" />
@@ -33,11 +22,6 @@
 		<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
 		<Deterministic>true</Deterministic>
 
-		<UnoRuntimeIdentifier Condition="'$(TargetFramework)'=='netstandard2.0'">Reference</UnoRuntimeIdentifier>
-
-		<!-- Ensures the .xr.xml files are generated in a proper layout folder -->
-		<GenerateLibraryLayout>true</GenerateLibraryLayout>
-
 		<!-- Force the generation of upri files for Uno.UI self localization -->
 		<UnoForceProcessPRIResource>true</UnoForceProcessPRIResource>
 
@@ -53,17 +37,11 @@
 		<PageExclusions>Themes\WinUI\Resources\**\*.xaml</PageExclusions>
 	</PropertyGroup>
 
-	<Import Project="..\Uno.CrossTargetting.props" />
-
 	<ItemGroup>
 		<UpToDateCheckInput Include="**\*.xaml" Exclude="bin\**\*.xaml;obj\**\*.xaml;Themes\WinUI\Resources\**\*.xaml;" Visible="False" />
 		<UpToDateCheckInput Include="**\*.cs" Exclude="bin\**\*.cs;obj\**\*.cs;" Visible="False" />
 		<UpToDateCheckInput Include="**\*.tt" Exclude="bin\**\*.tt;obj\**\*.tt;" Visible="False" />
 	</ItemGroup>
-
-	<PropertyGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
-		<EnableAutomaticXamlPageInclusion>false</EnableAutomaticXamlPageInclusion>
-	</PropertyGroup>
 
 	<ItemGroup>
 		<None Include="Extensions\CGSizeExtensions.iOSmacOS.cs" />
@@ -87,16 +65,17 @@
 		<None Include="UI\Xaml\Controls\Panel\Panel.macOS.cs" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Uno.SourceGenerationTasks" />
-		<PackageReference Include="System.Memory" Version="4.5.2" />
-	</ItemGroup>
-
 	<ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
-		<PackageReference Include="Xamarin.AndroidX.Legacy.Support.v4" />
 		<PackageReference Include="Xamarin.AndroidX.AppCompat" />
 		<PackageReference Include="Xamarin.AndroidX.RecyclerView" />
 		<PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData" />
+	</ItemGroup>
+
+	<!-- This condition is **explicitly** for net7.0 -->
+	<!-- Don't include this package for any version later than net7.0 -->
+	<!-- Once we remove net7.0 support, this ItemGroup should be deleted. -->
+	<ItemGroup Condition="'$(TargetFramework)' == 'net7.0-android'">
+		<PackageReference Include="Xamarin.AndroidX.Legacy.Support.v4" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -106,7 +85,7 @@
 		<ProjectReference Include="..\Uno.UWP\Uno.netcoremobile.csproj">
 			<TreatAsPackageReference>false</TreatAsPackageReference>
 		</ProjectReference>
-		<ProjectReference Include="..\SourceGenerators\System.Xaml\Uno.Xaml.netcoremobile.csproj" />
+		<ProjectReference Include="..\SourceGenerators\System.Xaml\Uno.Xaml.csproj" />
 		<ProjectReference Include="..\Uno.UI.BindingHelper.Android\Uno.UI.BindingHelper.Android.netcoremobile.csproj" Condition="'$(TargetPlatformIdentifier)' == 'android'">
 			<TreatAsPackageReference>false</TreatAsPackageReference>
 		</ProjectReference>
@@ -120,14 +99,6 @@
 		  <LogicalName>$(AssemblyName).xml</LogicalName>
 		</EmbeddedResource>
 		<EmbeddedResource Include="Microsoft\UI\Xaml\Controls\ProgressRing\*.json" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(TargetFramework)'=='net461'">
-		<!-- Remove the reference added automatically by msbuild extras -->
-		<Reference Remove="PresentationFramework" />
-		<Reference Remove="PresentationCore" />
-		<Reference Remove="WindowsBase" />
-		<Reference Remove="System.Xaml" />
 	</ItemGroup>
 
 	<PropertyGroup>
@@ -179,14 +150,6 @@
 	    <LastGenOutput>FrameworkElementMixins.g.cs</LastGenOutput>
 	  </None>
 	</ItemGroup>
-
-	<Target Name="GetPackagingOutputs" Condition=" '$(TargetFramework)' == 'uap10.0' " />
-
-	<Target Name="GetBuiltProjectOutputRecursive" Condition=" '$(TargetFramework)' == 'xamarinios10' " />
-	<Target Name="GetTargetPath" Condition=" '$(TargetFramework)' == 'xamarinios10' " />
-	<Target Name="GetNativeManifest" Condition=" '$(TargetFramework)' == 'xamarinios10' " />
-
-	<Target Name="GetBuiltProjectOutputRecursive" Condition=" '$(TargetFramework)' == 'xamarinios10' " />
 
 	<Target Name="VS16Mac_RemoveSystemMemory" BeforeTargets="ResolveAssemblyReferences" Condition="$([MSBuild]::IsOsPlatform('OSX'))">
 		<!--

@@ -8,13 +8,13 @@
 	xmlns:uc="using:Uno.UI.Samples.Converters"
 	xmlns:helper="using:Uno.UI.Samples.Behaviors"
 	xmlns:ios="http://umbrella/ios"
-	xmlns:xamarin="http://umbrella/xamarin"
+	xmlns:not_win="http://uno.ui/not_win"
 	xmlns:win="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:toolkit="using:Uno.UI.Toolkit"
 	xmlns:not_ios="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	mc:Ignorable="d ios xamarin"
+	mc:Ignorable="d ios not_win"
 	d:DesignHeight="300"
 	d:DesignWidth="400">
 
@@ -461,6 +461,7 @@
 						<ColumnDefinition Width="Auto" />
 						<ColumnDefinition Width="Auto" />
 						<ColumnDefinition Width="Auto" />
+						<ColumnDefinition Width="Auto" />
 					</Grid.ColumnDefinitions>
 
 					<!-- Back Button -->
@@ -558,6 +559,10 @@
 							  IsChecked="{Binding UseDarkTheme, Mode=TwoWay}">
 						<FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEC46;" />
 					</CheckBox>
+
+					<!-- Fluent styles check box -->
+					<CheckBox x:Name="RTLCheckBox" Content="RTL"
+							  Grid.Column="10" />
 				</Grid>
 
 				<!-- Sample Content -->

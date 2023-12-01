@@ -55,7 +55,6 @@ public partial class NativePopupBase : Primitives.Popup
 	public new static DependencyProperty IsOpenProperty { get; } = CreateIsOpenProperty();
 	#endregion
 
-
 	#region Child Property
 	public new UIElement Child
 	{
@@ -90,7 +89,7 @@ public partial class NativePopupBase : Primitives.Popup
 		get => GetHorizontalOffsetValue();
 		set => SetHorizontalOffsetValue(value);
 	}
-	private new void OnHorizontalOffsetChanged(double oldValue, double newValue)
+	private void OnHorizontalOffsetChanged(double oldValue, double newValue)
 		=> base.HorizontalOffset = newValue;
 
 	[GeneratedDependencyProperty(DefaultValue = 0.0, LocalCache = false, ChangedCallback = true)]
@@ -104,7 +103,7 @@ public partial class NativePopupBase : Primitives.Popup
 		set => SetVerticalOffsetValue(value);
 	}
 
-	private new void OnVerticalOffsetChanged(double oldValue, double newValue)
+	private void OnVerticalOffsetChanged(double oldValue, double newValue)
 		=> base.VerticalOffset = newValue;
 
 	[GeneratedDependencyProperty(DefaultValue = 0.0, LocalCache = false, ChangedCallback = true)]

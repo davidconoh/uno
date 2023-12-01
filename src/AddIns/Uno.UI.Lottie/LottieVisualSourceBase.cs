@@ -18,9 +18,17 @@ using Uno.Extensions;
 using Uno.Helpers;
 using System.Diagnostics;
 
+#if !HAS_UNO_WINUI
+using Microsoft.UI.Xaml.Controls;
+#endif
+
+#if HAS_UNO_WINUI
+namespace CommunityToolkit.WinUI.Lottie
+#else
 namespace Microsoft.Toolkit.Uwp.UI.Lottie
+#endif
 {
-	public abstract partial class LottieVisualSourceBase : DependencyObject, IAnimatedVisualSource
+	public abstract partial class LottieVisualSourceBase : DependencyObject, IAnimatedVisualSource, IAnimatedVisualSourceWithUri
 	{
 		public delegate void UpdatedAnimation(string animationJson, string cacheKey);
 
@@ -38,6 +46,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
 				default(Uri),
 				FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsArrange,
 				OnUriSourceChanged));
+
+		Uri IAnimatedVisualSourceWithUri.UriSource { get => UriSource; set => UriSource = value; }
 
 		public Uri UriSource
 		{
@@ -71,7 +81,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
 
 		private static void OnUriSourceChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
 		{
-			if (sender is LottieVisualSource source)
+			if (sender is LottieVisualSourceBase source)
 			{
 				source.Update(source._player);
 			}
@@ -111,7 +121,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
 
 		private static void ThrowNotImplementedOnNonTestPlatforms()
 		{
-#if !NET461
+#if !IS_UNIT_TESTS
 			throw new NotImplementedException();
 #endif
 		}

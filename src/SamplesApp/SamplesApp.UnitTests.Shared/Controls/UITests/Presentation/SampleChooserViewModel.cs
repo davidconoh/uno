@@ -85,9 +85,12 @@ namespace SampleControl.Presentation
 #endif
 		}
 
-		public SampleChooserViewModel()
+		public SampleChooserControl Owner { get; }
+
+		public SampleChooserViewModel(SampleChooserControl owner)
 		{
 			Instance = this;
+			Owner = owner;
 
 #if TRACK_REFS
 			Uno.UI.DataBinding.BinderReferenceHolder.IsEnabled = true;
@@ -469,6 +472,20 @@ namespace SampleControl.Presentation
 			}
 
 			var content = await UpdateContent(ct, runtimeTests) as FrameworkElement;
+			if (!Equals(SelectedLibrarySample, runtimeTests))
+			{
+				SelectedLibrarySample = null;
+			}
+
+			if (!Equals(SelectedRecentSample, runtimeTests))
+			{
+				SelectedRecentSample = null;
+			}
+
+			if (!Equals(SelectedFavoriteSample, runtimeTests))
+			{
+				SelectedFavoriteSample = null;
+			}
 			ContentPhone = content;
 		}
 
@@ -509,10 +526,9 @@ namespace SampleControl.Presentation
 						CoreDispatcherPriority.Normal,
 						async () =>
 						{
-							CurrentSelectedSample = newContent;
-
-							if (CurrentSelectedSample != null)
+							if (newContent != null)
 							{
+								CurrentSelectedSample = newContent;
 								ContentPhone = await UpdateContent(CancellationToken.None, newContent);
 							}
 						}
@@ -890,7 +906,16 @@ description: {sample.Description}";
 
 			if (newContent.ViewModelType != null)
 			{
-				var vm = Activator.CreateInstance(newContent.ViewModelType, container.Dispatcher);
+				var constructors = newContent.ViewModelType.GetConstructors();
+				object vm;
+				if (constructors.Any(c => c.GetParameters().Length == 1))
+				{
+					vm = Activator.CreateInstance(newContent.ViewModelType, container.Dispatcher);
+				}
+				else
+				{
+					vm = Activator.CreateInstance(newContent.ViewModelType);
+				}
 				container.DataContext = vm;
 
 				if (vm is IDisposable disposable)
@@ -1072,7 +1097,7 @@ description: {sample.Description}";
 				}
 				catch (IOException e)
 				{
-					_log.Error(e.Message);
+					_log.LogWarning(e.Message);
 				}
 			}
 #else
@@ -1100,7 +1125,7 @@ description: {sample.Description}";
 				}
 				catch (IOException e)
 				{
-					_log.Error(e.Message);
+					_log.LogWarning(e.Message);
 				}
 			}
 

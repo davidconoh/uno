@@ -14,24 +14,25 @@ using System.Drawing;
 using Uno.UI;
 using Windows.UI.Xaml.Media;
 
-using View = Windows.UI.Xaml.UIElement;
+using Uno.UI.Helpers;
 
 namespace Windows.UI.Xaml.Controls
 {
-	public partial class Panel : IEnumerable
+	public partial class Panel
 	{
-		private readonly SerialDisposable _borderBrushChanged = new SerialDisposable();
+		private Action _borderBrushChanged;
 
 		public Panel()
 		{
 			Initialize();
+			this.SizeChanged += (_, _) => UpdateBorder();
 		}
 
 		partial void Initialize();
 
 		partial void UpdateBorder()
 		{
-			SetBorder(BorderThicknessInternal, BorderBrushInternal);
+			SetBorder(BorderThicknessInternal, BorderBrushInternal, CornerRadiusInternal);
 		}
 
 		protected virtual void OnChildrenChanged()
@@ -46,13 +47,8 @@ namespace Windows.UI.Xaml.Controls
 
 		partial void OnBorderBrushChangedPartial(Brush oldValue, Brush newValue)
 		{
-			_borderBrushChanged.Disposable = null;
-			if (newValue?.SupportsAssignAndObserveBrush ?? false)
-			{
-				_borderBrushChanged.Disposable = Brush.AssignAndObserveBrush(newValue, _ => UpdateBorder());
-			}
-
-			UpdateBorder();
+			var newOnInvalidateRender = _borderBrushChanged ?? (() => UpdateBorder());
+			Brush.SetupBrushChanged(oldValue, newValue, ref _borderBrushChanged, newOnInvalidateRender);
 		}
 
 		partial void OnBorderThicknessChangedPartial(Thickness oldValue, Thickness newValue)
@@ -62,7 +58,7 @@ namespace Windows.UI.Xaml.Controls
 
 		partial void OnCornerRadiusChangedPartial(CornerRadius oldValue, CornerRadius newValue)
 		{
-			SetCornerRadius(newValue);
+			UpdateBorder();
 		}
 
 		/// <summary>        
@@ -74,14 +70,9 @@ namespace Windows.UI.Xaml.Controls
 		/// }
 		/// </summary>
 		/// <param name="view"></param>
-		public void Add(View view)
+		public void Add(UIElement view)
 		{
 			Children.Add(view);
-		}
-
-		public new IEnumerator GetEnumerator()
-		{
-			return this.GetChildren().GetEnumerator();
 		}
 
 		protected override void OnBackgroundChanged(DependencyPropertyChangedEventArgs e)
@@ -89,8 +80,5 @@ namespace Windows.UI.Xaml.Controls
 			base.OnBackgroundChanged(e);
 			UpdateHitTest();
 		}
-
-		bool ICustomClippingElement.AllowClippingToLayoutSlot => true;
-		bool ICustomClippingElement.ForceClippingToLayoutSlot => CornerRadiusInternal != CornerRadius.None;
 	}
 }

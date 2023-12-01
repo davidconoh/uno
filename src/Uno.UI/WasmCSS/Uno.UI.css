@@ -69,6 +69,7 @@ svg.uno-uielement {
   */
   pointer-events: none;
   stroke-width: 1px; /* default value of Shape.StrokeThickness */
+  overflow: visible
 }
 
 .uno-frameworkelement.uno-unarranged {
@@ -136,6 +137,12 @@ embed.uno-frameworkelement.uno-unarranged {
   overflow: hidden;
 }
 
+/* This fixes the issue for https://github.com/unoplatform/uno/issues/4563, but caused issues for ui tests */
+/*.uno-shape {
+    width: auto !important;
+    height: auto !important;
+}*/
+
 [data-use-hand-cursor-interaction="true"] .uno-buttonbase,
 [data-use-hand-cursor-interaction="true"] .uno-toggleswitch {
   cursor: pointer;
@@ -164,6 +171,10 @@ embed.uno-frameworkelement.uno-unarranged {
 
 .uno-textelement {
   position: relative;
+}
+
+.uno-svgelement {
+  vector-effect: non-scaling-stroke
 }
 
 .uno-htmlimage {
@@ -222,31 +233,33 @@ embed.uno-frameworkelement.uno-unarranged {
     overflow-y: scroll;
   }
 
+#uno-loading {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  background-color: var(--light-theme-bg-color, #F3F3F3);
+}
+
+@media (prefers-color-scheme: dark) {
+  #uno-loading {
+    background-color: var(--dark-theme-bg-color, #202020);
+  }
+}
+
+/* Splash image styling */
 .uno-splash {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  max-width: 620px;
-  width: calc(100vw - 10px);
+  max-width: min(90%, 620px);
+  max-height: min(90%, 300px);
+  width: auto;
   height: auto;
   background-repeat: no-repeat;
   background-position: center;
   background-size: 620px 300px;
-}
-
-/* Bootstrapper logo override */
-.uno-loader .logo {
-  position: fixed !important;
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  max-width: 620px !important;
-  width: calc(100vw - 10px) !important;
-  height: auto !important;
-  background-repeat: no-repeat !important;
-  background-position: center !important;
-  background-size: 620px 300px !important;
 }
 
 textarea {

@@ -107,10 +107,6 @@ namespace Windows.UI.Xaml.Controls
 				isOn = IsOn;
 				GoToState(useTransitions, isOn ? "On" : "Off");
 				GoToState(useTransitions, isOn ? "OnContent" : "OffContent");
-				// TODO Uno specific: We must force the knob to position, because
-				// we don't yet support the transitions which do this automatically
-				// in XAML template.
-				ForceSwitchKnobEndPosition();
 			}
 		}
 
@@ -419,7 +415,11 @@ namespace Windows.UI.Xaml.Controls
 			var args = new RoutedEventArgs();
 			args.OriginalSource = this;
 
-			Toggled?.Invoke(this, args);
+			// This workaround can be removed if pooling is removed. See https://github.com/unoplatform/uno/issues/12189
+			if (!_suppressToggled) // Uno workaround.
+			{
+				Toggled?.Invoke(this, args);
+			}
 
 			if (!_isDragging)
 			{

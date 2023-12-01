@@ -8,10 +8,6 @@
 		<_IsXamlTrimmingAvailable Condition="'$(MSBuildRuntimeType)'!='Core' and !$([MSBuild]::IsOSPlatform('windows'))">false</_IsXamlTrimmingAvailable>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<UnoSourceGeneratorBeforeTarget Condition="'$(XamarinProjectType)'=='android'" Include="UpdateAndroidAssets" />
-	</ItemGroup>
-
 	<Import Project="uno.ui.tasks.assets.targets"/>
 
 	<UsingTask AssemblyFile="$(UnoUIMSBuildTasksPath)\Uno.UI.Tasks.v0.dll" TaskName="Uno.UI.Tasks.ResourcesGenerator.ResourcesGenerationTask_v0" />
@@ -19,6 +15,7 @@
 	<UsingTask AssemblyFile="$(UnoUIMSBuildTasksPath)\Uno.UI.Tasks.v0.dll" TaskName="Uno.UI.Tasks.LinkerHintsGenerator.LinkerHintGeneratorTask_v0" TaskFactory="TaskHostFactory" />
 	<UsingTask AssemblyFile="$(UnoUIMSBuildTasksPath)\Uno.UI.Tasks.v0.dll" TaskName="Uno.UI.Tasks.LinkerHintsGenerator.LinkerDefinitionMergerTask_v0" TaskFactory="TaskHostFactory" />
 	<UsingTask AssemblyFile="$(UnoUIMSBuildTasksPath)\Uno.UI.Tasks.v0.dll" TaskName="Uno.UI.Tasks.EmbeddedResourceInjector.EmbeddedResourceInjectorTask_v0" TaskFactory="TaskHostFactory" />
+	<UsingTask AssemblyFile="$(UnoUIMSBuildTasksPath)\Uno.UI.Tasks.v0.dll" TaskName="Uno.UI.Tasks.RuntimeAssetsSelector.RuntimeAssetsSelectorTask_v0" />
 
 	<Target Name="_UnoLangSetup">
 		<!-- String resources -->
@@ -46,7 +43,7 @@
 	  to inject Uno properly. Failing to add this task early enough makes X.A and X.I miss the generated resource files.
 	-->
 	<Target Name="UnoResourcesGeneration"
-				BeforeTargets="_GetLibraryImports;PrepareForBuild;_CheckForContent;_CollectBundleResources"
+				BeforeTargets="_GetLibraryImports;PrepareForBuild;_CheckForContent;_CollectBundleResources;_ComputeAndroidResourcePaths"
 				DependsOnTargets="ResolveProjectReferences;_UnoLangSetup"
 				Condition="'$(DesignTimeBuild)' != 'true' and '$(BuildingInsideUnoSourceGenerator)' == ''">
 
@@ -84,10 +81,15 @@
 			<Output TaskParameter="AssignedFiles" ItemName="PRIResourceWithTargetPath" />
 		</AssignTargetPath>
 
+		<PropertyGroup>
+			<_ResourceOutputPath>$(IntermediateOutputPath)g\ResourcesGenerator</_ResourceOutputPath>
+			<_ResourceStampFile>$(IntermediateOutputPath)g\uno.stamp</_ResourceStampFile>
+		</PropertyGroup>
+
 		<ResourcesGenerationTask_v0 Resources="@(PRIResourceWithTargetPath)"
 									 TargetProjectDirectory="$(ProjectDir)"
 									 TargetPlatform="$(XamarinProjectType)"
-									 IntermediateOutputPath="$(IntermediateOutputPath)"
+									 OutputPath="$(_ResourceOutputPath)"
 									 DefaultLanguage="$(DefaultLanguage)"
 									 IsUnoHead="$(_IsUnoHead)"
 									 ProjectName="$(AssemblyName)"
@@ -97,11 +99,17 @@
 		</ResourcesGenerationTask_v0>
 		<ItemGroup>
 			<BundleResource Condition="'%(GeneratedFiles.UnoResourceTarget)' =='iOS'" Include="@(GeneratedFiles)" />
-			<AndroidResource Condition="'%(GeneratedFiles.UnoResourceTarget)' =='Android'" Include="@(GeneratedFiles)" />
+			<_UnoAndroidResources Condition="'%(GeneratedFiles.UnoResourceTarget)' =='Android'" Include="@(GeneratedFiles)" />
+			<LibraryResourceDirectories Condition="'@(_UnoAndroidResources->Count ())' != '0' " Include="$(_ResourceOutputPath)\r">
+                <StampFile>$(_ResourceStampFile)</StampFile>
+            </LibraryResourceDirectories>
 			<EmbeddedResource Condition="'%(GeneratedFiles.UnoResourceTarget)' =='Uno'" Include="@(GeneratedFiles)" />
 
 			<!-- Clear temporary group -->
 			<_UnoTempPRIResource Remove="@(_UnoTempPRIResource)" />
+
+			<!-- Ensure files are tracked properly for incremental build and clean targets -->
+			<FileWrites Include="@(GeneratedFiles)" />
 		</ItemGroup>
 	</Target>
 
@@ -116,7 +124,7 @@
 	</Target>
 
 	<Target Name="UnoAssetsGeneration"
-				BeforeTargets="_GetLibraryImports;_CheckForContent;_CollectBundleResources;_CompileAppManifest"
+				BeforeTargets="_GetLibraryImports;_CheckForContent;_CollectBundleResources;_CompileAppManifest;_ComputeAndroidResourcePaths"
 				DependsOnTargets="ResolveProjectReferences;GetCopyToOutputDirectoryItems;_UnoLangSetup"
 				Condition="
 				'$(DesignTimeBuild)' != 'true'
@@ -155,10 +163,17 @@
 		<ItemGroup Condition="'$(XamarinProjectType)'=='ios'">
 			<BundleResource Condition="'%(RetargetedAssets.AssetType)' == 'image'" Include="@(RetargetedAssets)" />
 			<BundleResource Condition="'%(RetargetedAssets.AssetType)' == 'generic'" Include="@(RetargetedAssets)" />
+
+			<FileWrites Condition="'%(RetargetedAssets.AssetType)' == 'image'" Include="@(RetargetedAssets)" />
+			<FileWrites Condition="'%(RetargetedAssets.AssetType)' == 'generic'" Include="@(RetargetedAssets)" />
 		</ItemGroup>
 		<ItemGroup Condition="'$(XamarinProjectType)'=='android'">
 			<AndroidResource Condition="'%(RetargetedAssets.AssetType)' =='image'" Include="@(RetargetedAssets)" />
 			<AndroidAsset Condition="'%(RetargetedAssets.AssetType)' =='generic'" Include="@(RetargetedAssets)" />
+
+			<!-- Ensure files are tracked properly for incremental build and clean targets -->
+			<FileWrites Condition="'%(RetargetedAssets.AssetType)' =='image'" Include="@(RetargetedAssets)" />
+			<FileWrites Condition="'%(RetargetedAssets.AssetType)' =='generic'" Include="@(RetargetedAssets)" />
 		</ItemGroup>
 	</Target>
 
@@ -187,6 +202,8 @@
 
 		<ItemGroup>
 			<EmbeddedResource Include="$(IntermediateOutputPath)ILLink.Substitutions.xml" LogicalName="ILLink.Substitutions.xml" />
+			
+			<FileWrites Include="$(IntermediateOutputPath)ILLink.Substitutions.xml" />
 		</ItemGroup>
 
 	</Target>

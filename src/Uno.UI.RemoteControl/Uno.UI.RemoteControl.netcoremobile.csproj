@@ -1,11 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net6.0-android;net6.0-ios</TargetFrameworks>
-		<TargetFrameworks>$(TargetFrameworks);net6.0-maccatalyst;net6.0-macos</TargetFrameworks>
-
-		<TargetFrameworks>$(TargetFrameworks);net7.0-android;net7.0-ios</TargetFrameworks>
-		<TargetFrameworks>$(TargetFrameworks);net7.0-maccatalyst;net7.0-macos</TargetFrameworks>
+		<TargetFrameworks>$(NetMobilePreviousAndCurrent)</TargetFrameworks>
 	</PropertyGroup>
 
 	<Import Project="../targetframework-override.props" />
@@ -14,9 +10,6 @@
 		<AssemblyName>Uno.UI.RemoteControl</AssemblyName>
 		<RootNamespace>Uno.UI.RemoteControl</RootNamespace>
 
-		<!-- Ensures the .xr.xml files are generated in a proper layout folder -->
-		<GenerateLibraryLayout>true</GenerateLibraryLayout>
-
 		<NoWarn>$(NoWarn);NU1701</NoWarn>
 
 		<Nullable>enable</Nullable>
@@ -24,24 +17,23 @@
 		<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
 		<Deterministic>true</Deterministic>
 
-		<PackageId>Uno.UI.RemoteControl</PackageId>
-		<PackageId Condition="'$(UNO_UWP_BUILD)'=='false'">Uno.WinUI.RemoteControl</PackageId>
+		<PackageId>Uno.UI.DevServer</PackageId>
+		<PackageId Condition="'$(UNO_UWP_BUILD)'=='false'">Uno.WinUI.DevServer</PackageId>
+		<CommonOverridePackageId>$(PackageId)</CommonOverridePackageId>
 	</PropertyGroup>
-
-	<Import Project="..\Uno.CrossTargetting.props" />
 
 	<ItemGroup>
 		<UpToDateCheckInput Include="**\*.cs" Exclude="bin\**\*.cs;obj\**\*.cs;" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(TargetFramework)'!='netstandard2.0'">
+	<ItemGroup>
 		<EmbeddedResource Include="LinkerDefinition.Xamarin.xml">
 			<LogicalName>$(AssemblyName).xml</LogicalName>
 		</EmbeddedResource>
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Content Include="buildTransitive\Uno.UI.RemoteControl.targets">
+	  <Content Include="buildTransitive\Uno.UI.DevServer.targets">
 	    <PackagePath>build</PackagePath>
 	    <Pack>true</Pack>
 	  </Content>
@@ -54,6 +46,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Uno.Foundation\Uno.Foundation.netcoremobile.csproj" />
+		<ProjectReference Include="..\Uno.UI.RemoteControl.Messaging\Uno.UI.RemoteControl.Messaging.csproj" />
 		<ProjectReference Include="..\Uno.UWP\Uno.netcoremobile.csproj" />
 		<ProjectReference Include="..\Uno.UI\Uno.UI.netcoremobile.csproj" />
 	</ItemGroup>
@@ -74,23 +67,4 @@
 		</ProjectReference>
 	</ItemGroup>
 
-	<Target Name="GetBuiltProjectOutputRecursive" Condition=" '$(TargetFramework)' == 'xamarinios10' " />
-
-	<Target Name="_UnoRemoteControlOverrideNuget" AfterTargets="AfterBuild" DependsOnTargets="BuiltProjectOutputGroup" Condition="'$(UnoNugetOverrideVersion)'!=''">
-
-		<PropertyGroup>
-			<_OverrideTargetFramework>$(TargetFramework)</_OverrideTargetFramework>
-			<_baseNugetPath Condition="'$(USERPROFILE)'!=''">$(USERPROFILE)</_baseNugetPath>
-			<_baseNugetPath Condition="'$(HOME)'!=''">$(HOME)</_baseNugetPath>
-			<_TargetNugetFolder>$(_baseNugetPath)\.nuget\packages\uno.ui\$(UnoNugetOverrideVersion)\lib\$(_OverrideTargetFramework)</_TargetNugetFolder>
-		</PropertyGroup>
-		<ItemGroup>
-			<_OutputFiles Include="$(TargetDir)\*.*" />
-		</ItemGroup>
-		<MakeDir Directories="$(_TargetNugetFolder)" />
-
-		<Message Importance="high" Text="OVERRIDING NUGET PACKAGE CACHE: $(_TargetNugetFolder)" />
-
-		<Copy SourceFiles="@(_OutputFiles)" DestinationFiles="@(_OutputFiles->'$(_TargetNugetFolder)\%(RecursiveDir)%(Filename)%(Extension)')" />
-	</Target>
 </Project>

@@ -1,3 +1,7 @@
+---
+uid: Uno.Features.WAMDataTransfer
+---
+
 ## Sharing Content
 
 The data transfer manager allows sharing content from your application using the OS sharing dialog. To check whether sharing is supported at runtime, use `IsSupported()` method:
@@ -13,9 +17,9 @@ Currently, the following types of content can be shared:
 
 | Type of content   | Android | iOS | macOS | WASM | Tizen |
 |-------------------|---------|-----|-------|------| ----- |
-| Text              | ✅      | ✅ | ✅    | ✅  | ✅    |
-| Uri               | ✅      | ✅ | ✅    | ✅  |✅     |
-| File              | ❌      | ❌ | ❌    | ❌  |❌     |   
+| Text              | ✔      | ✔ | ✔    | ✔  | ✔    |
+| Uri               | ✔      | ✔ | ✔    | ✔  |✔     |
+| File              | ✖      | ✖ | ✖    | ✖  |✖     |   
 
 To set up the `DataTransferManager` use the following snippet:
 

@@ -1,4 +1,13 @@
-﻿# Uno Support for Windows.System.Profile APIs
+﻿---
+uid: Uno.Features.WSProfile
+---
+
+# Windows.System.Profile APIs
+
+> [!TIP]
+> This article covers Uno-specific information for `Windows.System.Profile` namespace. For a full description of the feature and instructions on using it, consult the UWP documentation: https://learn.microsoft.com/en-us/uwp/api/windows.system.profile
+
+* The `Windows.System.Profile` namespace provides classes for accessing and managing information about the device.
 
 ## `AnalyticsInfo`
 

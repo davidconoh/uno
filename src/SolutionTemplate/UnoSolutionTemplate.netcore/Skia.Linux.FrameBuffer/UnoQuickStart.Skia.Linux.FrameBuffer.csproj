@@ -3,13 +3,12 @@
 	<PropertyGroup>
 		<OutputType Condition="'$(Configuration)'=='Release'">WinExe</OutputType>
 		<OutputType Condition="'$(Configuration)'=='Debug'">Exe</OutputType>
-		<TargetFramework>net6.0</TargetFramework>
+		<TargetFramework>net7.0</TargetFramework>
 	</PropertyGroup>
 
 	<ItemGroup Condition="exists('..\$ext_safeprojectname$.UWP')">
 		<EmbeddedResource Include="..\$ext_safeprojectname$.UWP\Package.appxmanifest" LogicalName="Package.appxmanifest" />
-		<Content Include="..\$ext_safeprojectname$.UWP\Assets\StoreLogo.png" Link="Assets\StoreLogo.png" />
-		<Content Include="Assets\Fonts\uno-fluentui-assets.ttf" />
+		<Content Include="..\$ext_safeprojectname$.UWP\Assets\StoreLogo.png" Link="Assets\StoreLogo.png" />		
 	</ItemGroup>
 
 	<ItemGroup>

@@ -3,6 +3,7 @@
   "language": "en",
   "words": [
 	"Avalonia",
+	"ambiently",
 	"binlog",
 	"Blazor",
 	"blockquotes",
@@ -26,13 +27,17 @@
 	"Docfx",
 	"ellipsize",
 	"Expando",
+	"flyouts",
 	"Framebuffer",
+	"Gamepad",
+	"gamepads",
 	"Geolocation",
 	"globbing",
 	"Gyrometer",
 	"Hanja",
 	"hectopascals",
 	"Inlines",
+	"keychain",
 	"laggy",
 	"layouter",
 	"layouting",
@@ -41,6 +46,7 @@
 	"mergeable",
 	"MSAL",
 	"msbuild",
+	"MVUX",
 	"MVVM",
 	"NETSDK",
 	"netstandard",
@@ -53,6 +59,8 @@
 	"Pluralsight",
 	"POSIX",
 	"reentrantly",
+	"Resizetizer",
+	"resw",
 	"roadmap",
 	"sandboxed",
 	"Segoe",
@@ -76,10 +84,13 @@
 	"UWP's",
 	"VSIX",
 	"walkthrough",
-	"WEBASSEMBLY"
+	"WEBASSEMBLY",
+	"Haptics"
   ],
   "ignoreWords": [
 	"ADAL",
+	"AEHD",
+	"appsettings",
 	"Authenticode",
 	"automagically",
 	"Divio's",
@@ -102,9 +113,13 @@
 	"McCaffrey",
 	"mdpi",
 	"Mergify",
+	"mlaunch",
 	"netstd",
 	"nventive",
+	"odel",
+	"pdate",
 	"Ronica",
+	"Serilog",
 	"Singh",
 	"slnf",
 	"Stetho",
@@ -113,9 +128,22 @@
 	"Udemy",
 	"UNOB",
 	"winui",
-	"illinker"
+	"illinker",
+	"Onoh",
+	"Findlay",
+	"Logpoints",
+	"addin",
+	"Yowza",
+	"unpackaged",
+	"GNSS",
+	"winappsdk"
   ],
   "patterns": [
+	{
+		"name": "Markdown uid",
+		"pattern": "^(?=uid:).*$",
+		"description": ""
+	},
 	{
 	  "name": "Markdown links",
 	  "pattern": "\\((.*)\\)",
@@ -152,6 +180,7 @@
 	}
   ],
   "ignoreRegExpList": [
+	"Markdown uid",
 	"Markdown links",
 	"Markdown code blocks",
 	"Inline code blocks",

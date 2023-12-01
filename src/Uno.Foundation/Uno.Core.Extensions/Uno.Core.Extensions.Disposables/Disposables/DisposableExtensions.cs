@@ -1,7 +1,7 @@
 #nullable enable
 
 // ******************************************************************
-// Copyright � 2015-2018 nventive inc. All rights reserved.
+// Copyright � 2015-2018 Uno Platform Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,34 +87,6 @@ namespace Uno.Disposables
 				return true;
 			}
 			return false;
-		}
-
-
-		/// <summary>
-		/// Dispose all items of an enumerable sequence
-		/// <remarks>IF one dispose fails, continue other an raise a single Aggregate exception</remarks>
-		/// </summary>
-		/// <exception cref="AggregateException">Raised if any dispose fails</exception>
-		public static void DisposeAll<T>(this IEnumerable<T> source)
-			where T : IDisposable
-		{
-			var exceptions = new List<Exception>();
-			foreach (var disposable in source)
-			{
-				try
-				{
-					disposable?.Dispose();
-				}
-				catch (Exception e)
-				{
-					exceptions.Add(e);
-				}
-			}
-
-			if (exceptions.Any())
-			{
-				throw new AggregateException(exceptions);
-			}
 		}
 	}
 }

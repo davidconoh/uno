@@ -32,6 +32,9 @@ namespace Uno.Foundation.Interop
 			private bool _isPrototypeExported;
 			private Dictionary<string, MethodInfo> _methods;
 
+			private static readonly char[] _parametersTrimArray = new char[] { '{', '}', ' ' };
+			private static readonly char[] _doubleQuoteSpaceArray = new[] { '"', ' ' };
+
 			public ReflectionMetadata(Type type)
 			{
 				_type = type;
@@ -50,7 +53,7 @@ namespace Uno.Foundation.Interop
 				}
 
 				var id = Interlocked.Increment(ref _handles);
-				WebAssemblyRuntime.InvokeJS($"{_type.FullName}.createInstance(\"{managedHandle}\", \"{id}\")");
+				WebAssemblyRuntime.InvokeJS($"{_type.FullName}.createInstance({managedHandle}, {id})");
 
 				return id;
 			}
@@ -61,17 +64,17 @@ namespace Uno.Foundation.Interop
 
 			/// <inheritdoc />
 			public void DestroyNativeInstance(IntPtr managedHandle, long jsHandle)
-				=> WebAssemblyRuntime.InvokeJS($"{_type.FullName}.destroyInstance(\"{managedHandle}\", \"{jsHandle}\")");
+				=> WebAssemblyRuntime.InvokeJS($"{_type.FullName}.destroyInstance({managedHandle}, {jsHandle})");
 
 			/// <inheritdoc />
 			public object InvokeManaged(object instance, string method, string jsonParameters)
 			{
 				// TODO: Properly parse parameters
 				var parameters = jsonParameters
-					.Trim('{', '}', ' ')
-					.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+					.Trim(_parametersTrimArray)
+					.Split(',', StringSplitOptions.RemoveEmptyEntries)
 					.Where(parameter => parameter.HasValueTrimmed())
-					.Select(parameter => parameter.Split(new[] { ':' }, 2)[1].Trim('"', ' '))
+					.Select(parameter => parameter.Split(':', 2)[1].Trim(_doubleQuoteSpaceArray))
 					.ToArray();
 
 				return _methods[method].Invoke(instance, parameters);

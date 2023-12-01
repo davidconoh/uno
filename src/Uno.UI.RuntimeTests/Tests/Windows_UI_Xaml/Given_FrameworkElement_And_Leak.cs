@@ -11,10 +11,13 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
+#if !HAS_UNO_WINUI
 using Microsoft.UI.Xaml.Controls;
+#endif
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Private.Infrastructure;
 using Uno.Extensions;
+using Uno.UI.RuntimeTests.Helpers;
 using Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml.Controls;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
@@ -29,10 +32,6 @@ using UIKit;
 
 namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 {
-#if NET6_0_OR_GREATER && __ANDROID__
-	[Ignore("Disabled until https://github.com/dotnet/runtime/pull/55681 is released. See https://github.com/unoplatform/uno/issues/5873")]
-#endif
-
 	[TestClass]
 	[RunsOnUIThread]
 #if __MACOS__
@@ -63,7 +62,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 		[DataRow(typeof(Slider), 15)]
 		[DataRow(typeof(SymbolIcon), 15)]
 		[DataRow(typeof(Viewbox), 15)]
-		[DataRow(typeof(MenuBar), 15)]
+		[DataRow(typeof(Microsoft.UI.Xaml.Controls.MenuBar), 15)]
 		[DataRow(typeof(ComboBox), 15)]
 		[DataRow(typeof(Canvas), 15)]
 		[DataRow(typeof(AutoSuggestBox), 15)]
@@ -75,17 +74,26 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 		[DataRow(typeof(RelativePanel), 15)]
 		[DataRow(typeof(FlipView), 15)]
 		[DataRow(typeof(DatePicker), 15)]
+#if !__IOS__ // Disabled https://github.com/unoplatform/uno/issues/9080
 		[DataRow(typeof(CalendarView), 15)]
+#endif
 		[DataRow(typeof(Page), 15)]
 		[DataRow(typeof(Image), 15)]
-		[DataRow(typeof(MenuBar), 15)]
 		[DataRow(typeof(ToggleSwitch), 15)]
-		[DataRow(typeof(SwipeControl), 15)]
+		[DataRow(typeof(Microsoft.UI.Xaml.Controls.SwipeControl), 15)]
 		[DataRow(typeof(SplitView), 15)]
-		[DataRow(typeof(Microsoft.UI.Xaml.Controls.AnimatedIcon), 15)]
+		[DataRow(typeof(Microsoft.UI.Xaml.Controls.AnimatedIcon), 15,
+#if __ANDROID__
+			LeakTestStyles.Default // Fluent styles disabled - #14341
+#else
+			LeakTestStyles.All
+#endif
+			)]
 		[DataRow(typeof(Microsoft.UI.Xaml.Controls.BreadcrumbBar), 15)]
 		[DataRow(typeof(Microsoft.UI.Xaml.Controls.BreadcrumbBarItem), 15)]
+#if !__IOS__ // Disabled https://github.com/unoplatform/uno/issues/9080
 		[DataRow(typeof(Microsoft.UI.Xaml.Controls.ColorPicker), 15)]
+#endif
 		[DataRow(typeof(Microsoft.UI.Xaml.Controls.Primitives.ColorPickerSlider), 15)]
 		[DataRow(typeof(Microsoft.UI.Xaml.Controls.Primitives.ColorSpectrum), 15)]
 		[DataRow(typeof(Microsoft.UI.Xaml.Controls.Expander), 15)]
@@ -122,11 +130,40 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 #if !__WASM__ && !__IOS__ // Disabled - https://github.com/unoplatform/uno/issues/7860
 		[DataRow("Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml.Controls.ContentDialog_Leak", 15)]
 #endif
-#if !__IOS__ // Disabled - #10344
-		[DataRow(typeof(TextBox_Focus_Leak), 15)]
-		[DataRow(typeof(PasswordBox_Focus_Leak), 15)]
+		[DataRow(typeof(TextBox_Focus_Leak), 15,
+#if __IOS__
+			LeakTestStyles.None // Disabled - #10344
+#else
+			LeakTestStyles.All
 #endif
-		public async Task When_Add_Remove(object controlTypeRaw, int count)
+			)]
+		[DataRow(typeof(PasswordBox_Focus_Leak), 15,
+#if __IOS__
+			LeakTestStyles.None // Disabled - #10344
+#elif __ANDROID__
+			LeakTestStyles.Default // Fluent styles disabled - #14340
+#else
+			LeakTestStyles.All
+#endif
+			)]
+		public async Task When_Add_Remove(object controlTypeRaw, int count, LeakTestStyles leakTestStyles = LeakTestStyles.All)
+		{
+			if (leakTestStyles.HasFlag(LeakTestStyles.Default))
+			{
+				// Test for leaks both without and with fluent styles
+				await When_Add_Remove_Inner(controlTypeRaw, count);
+			}
+
+			if (leakTestStyles.HasFlag(LeakTestStyles.Fluent))
+			{
+				using (var themeHelper = StyleHelper.UseFluentStyles())
+				{
+					await When_Add_Remove_Inner(controlTypeRaw, count);
+				}
+			}
+		}
+
+		private async Task When_Add_Remove_Inner(object controlTypeRaw, int count)
 		{
 #if TRACK_REFS
 			var initialInactiveStats = Uno.UI.DataBinding.BinderReferenceHolder.GetInactiveViewReferencesStats();
@@ -209,7 +246,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 
 			var retainedMessage = "";
 
-#if NET5_0 || __IOS__ || __ANDROID__
+#if __IOS__ || __ANDROID__
 			if (activeControls != 0)
 			{
 				var retainedTypes = _holders.AsEnumerable().Select(ExtractTargetName).JoinBy(";");
@@ -229,7 +266,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 			Assert.AreEqual(0, activeControls, retainedMessage);
 #endif
 
-#if NET5_0 || __IOS__ || __ANDROID__
+#if __IOS__ || __ANDROID__
 			static string? ExtractTargetName(KeyValuePair<DependencyObject, Holder> p)
 			{
 				if (p.Key is FrameworkElement fe)
@@ -353,6 +390,15 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 			}
 
 			public static void Reset() => _counter = 0;
+		}
+
+		[Flags]
+		public enum LeakTestStyles
+		{
+			None = 0,
+			Default = 1,
+			Fluent = 2,
+			All = Default | Fluent
 		}
 	}
 }

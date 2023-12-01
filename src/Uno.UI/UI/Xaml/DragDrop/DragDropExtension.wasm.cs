@@ -30,16 +30,20 @@ using Uno.UI;
 using Uno.UI.Xaml;
 using System.Diagnostics.CodeAnalysis;
 
+using NativeMethods = __Windows.ApplicationModel.DataTransfer.DragDrop.Core.DragDropExtension.NativeMethods;
+using System.Runtime.InteropServices.JavaScript;
+
 // As IDragDropExtension is internal, the generated registration cannot be used.
 // [assembly: ApiExtension(typeof(Windows.ApplicationModel.DataTransfer.DragDrop.Core.IDragDropExtension), typeof(Windows.ApplicationModel.DataTransfer.DragDrop.Core.DragDropExtension))]
 
 namespace Windows.ApplicationModel.DataTransfer.DragDrop.Core
 {
-	internal class DragDropExtension : IDragDropExtension
+	internal partial class DragDropExtension : IDragDropExtension
 	{
 		private const long _textReadTimeoutTicks = 10 * TimeSpan.TicksPerSecond;
-		private const string _jsType = "Windows.ApplicationModel.DataTransfer.DragDrop.Core.DragDropExtension";
+
 		private static readonly Logger _log = typeof(DragDropExtension).Log();
+		private static readonly char[] _newLineChars = new[] { '\r', '\n' };
 
 		private static DragDropExtension? _current;
 
@@ -100,7 +104,7 @@ namespace Windows.ApplicationModel.DataTransfer.DragDrop.Core
 
 		private static void EnableExternalWarning()
 		{
-			WebAssemblyRuntime.InvokeJS("Windows.ApplicationModel.DataTransfer.DragDrop.Core.DragDropExtension.registerNoOp();");
+			NativeMethods.RegisterNoOp();
 		}
 
 		/// <inheritdoc />
@@ -112,6 +116,7 @@ namespace Windows.ApplicationModel.DataTransfer.DragDrop.Core
 
 		[Preserve]
 		[EditorBrowsable(EditorBrowsableState.Never)]
+		[JSExport]
 		public static string OnNativeDropEvent()
 		{
 			try
@@ -301,8 +306,8 @@ namespace Windows.ApplicationModel.DataTransfer.DragDrop.Core
 				"text/uri-list" => // https://datatracker.ietf.org/doc/html/rfc2483#section-5
 					(StandardDataFormats.WebLink,
 					async ct => new Uri((await RetrieveText(ct, id))
-						.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-						.Where(line => !line.StartsWith("#", StringComparison.Ordinal))
+						.Split(_newLineChars, StringSplitOptions.RemoveEmptyEntries)
+						.Where(line => !line.StartsWith('#'))
 						.First())),
 				"text/plain" => (StandardDataFormats.Text, async ct => await RetrieveText(ct, id)),
 				"text/html" => (StandardDataFormats.Html, async ct => await RetrieveText(ct, id)),
@@ -312,8 +317,7 @@ namespace Windows.ApplicationModel.DataTransfer.DragDrop.Core
 
 		private static async Task<IReadOnlyList<IStorageItem>> RetrieveFiles(CancellationToken ct, params int[] itemsIds)
 		{
-			var rawItemsIds = string.Join(", ", itemsIds.Select(id => id.ToStringInvariant()));
-			var infosRaw = await WebAssemblyRuntime.InvokeAsync($"{_jsType}.retrieveFiles({rawItemsIds})", ct);
+			var infosRaw = await NativeMethods.RetrieveFilesAsync(itemsIds);
 			var infos = JsonHelper.Deserialize<NativeStorageItemInfo[]>(infosRaw);
 			var items = infos.Select(StorageFile.GetFromNativeInfo).ToList();
 
@@ -322,10 +326,7 @@ namespace Windows.ApplicationModel.DataTransfer.DragDrop.Core
 
 		private static async Task<string> RetrieveText(CancellationToken ct, int itemId)
 		{
-			using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct, new CancellationTokenSource(TimeSpan.FromTicks(_textReadTimeoutTicks)).Token);
-			var text = await WebAssemblyRuntime.InvokeAsync($"{_jsType}.retrieveText({itemId.ToStringInvariant()})", cts.Token);
-
-			return text;
+			return await NativeMethods.RetrieveTextAsync(itemId);
 		}
 
 		private static DataPackageOperation ToDataPackageOperation(string allowedOperations)

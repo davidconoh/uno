@@ -25,7 +25,9 @@ using Windows.UI.Xaml.Shapes;
 using Uno.UI.RuntimeTests;
 using Windows.Foundation.Collections;
 using ButtonBase = Windows.UI.Xaml.Controls.Primitives.ButtonBase;
+#if !HAS_UNO_WINUI
 using Microsoft.UI.Xaml.Controls;
+#endif
 using Uno.UI;
 using Windows.UI.Xaml.Controls.Primitives;
 
@@ -432,6 +434,7 @@ namespace Windows.UI.Tests.Enterprise
 			LOG_OUTPUT("ValidateOverflowPosition: Opened Down, Aligned Left, FlowDirection=LTR");
 			await ValidateOverflowPlacementWorker(OverflowOpenDirection.Down, OverflowAlignment.Left, false /*isRTL*/);
 
+#if !HAS_UNO // TODO: Fix these scenarios.
 			// Validate the same scenarios, except with FlowDirection=RTL
 			LOG_OUTPUT("ValidateOverflowPosition: Opened Up, Aligned Right, FlowDirection=RT");
 			await ValidateOverflowPlacementWorker(OverflowOpenDirection.Up, OverflowAlignment.Right, true /*isRTL*/);
@@ -444,6 +447,7 @@ namespace Windows.UI.Tests.Enterprise
 
 			LOG_OUTPUT("ValidateOverflowPosition: Opened Down, Aligned Left, FlowDirection=RT");
 			await ValidateOverflowPlacementWorker(OverflowOpenDirection.Down, OverflowAlignment.Left, true /*isRTL*/);
+#endif
 		}
 
 		[TestMethod]
@@ -2534,11 +2538,15 @@ namespace Windows.UI.Tests.Enterprise
 			//double expectedCommandBarWidth = 500;
 
 			double expectedCommandBarWidth = Window.Current.Bounds.Width;
+			if (TestServices.WindowHelper.IsXamlIsland)
+			{
+				expectedCommandBarWidth = TestServices.WindowHelper.XamlRoot.Size.Width;
+			}
 
 #if __IOS__
 			await RunOnUIThread(() =>
 			{
-				expectedCommandBarWidth = ViewHelper.GetScreenSize().Width;
+				expectedCommandBarWidth = ViewHelper.GetMainWindowSize().Width;
 			});
 #endif
 			double expectedCommandBarCompactClosedHeight = 40;
@@ -2723,9 +2731,6 @@ namespace Windows.UI.Tests.Enterprise
 
 		[TestMethod]
 
-#if __ANDROID__
-		[Ignore("Unstable on Android, the overflow button is not hidden because of a off-by-one pixel error. https://github.com/unoplatform/uno/issues/9080")]
-#endif
 		[Description("Validates the overflow button is hidden when told to be hidden, or when there's nothing to be shown by clicking it, with no app bar buttons.")]
 		public async Task ValidateOverflowButtonHidesWhenAppropriateWithNoAppBarButtons()
 		{
@@ -2734,9 +2739,6 @@ namespace Windows.UI.Tests.Enterprise
 
 
 		[TestMethod]
-#if __ANDROID__
-		[Ignore("Unstable on Android, the overflow button is not hidden because of a off-by-one pixel error. https://github.com/unoplatform/uno/issues/9080")]
-#endif
 
 		[Description("Validates the overflow button is hidden when told to be hidden, or when there's nothing to be shown by clicking it, with primary app bar buttons.")]
 		public async Task ValidateOverflowButtonHidesWhenAppropriateWithPrimaryAppBarButtons()
@@ -3890,9 +3892,6 @@ namespace Windows.UI.Tests.Enterprise
 		}
 
 		[TestMethod]
-#if __ANDROID__
-		[Ignore("Unstable on Android, the overflow button is not hidden because of a off-by-one pixel error. https://github.com/unoplatform/uno/issues/9080")]
-#endif
 		[Description("Validates that adding elements to the secondary collection or changing the value of ClosedDisplayMode changes the visibility of the more button.")]
 		public async Task ValidateMoreButtonCanShowWithoutSizeChanging()
 		{

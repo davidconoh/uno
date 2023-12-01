@@ -1,22 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>netstandard2.0</TargetFrameworks>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(MSBuildRuntimeType)'=='Core'">
-		<TargetFrameworks>$(TargetFrameworks);net7.0</TargetFrameworks>
+		<TargetFrameworks>$(NetWasmPreviousAndCurrent)</TargetFrameworks>
 	</PropertyGroup>
 
 	<Import Project="../targetframework-override.props" />
 
 	<PropertyGroup>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<AssemblyName>Uno.UI.Dispatching</AssemblyName>
 		<RootNamespace>Uno.UI.Dispatching</RootNamespace>
 		<DefineConstants>$(DefineConstants);XAMARIN;IS_UNO;IS_UNO_UI_DISPATCHING_PROJECT</DefineConstants>
-
-		<!-- Ensures the .xr.xml files are generated in a proper layout folder -->
-		<GenerateLibraryLayout>true</GenerateLibraryLayout>
 
 		<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
 		<Deterministic>true</Deterministic>
@@ -25,17 +19,10 @@
 		<PlatformItemsBasePath>.\</PlatformItemsBasePath>
 	</PropertyGroup>
 
-	<Import Project="..\Uno.CrossTargetting.props" />
-
 	<ItemGroup>
 	  <EmbeddedResource Include="LinkerDefinition.Wasm.xml">
 	    <LogicalName>$(AssemblyName).xml</LogicalName>
 	  </EmbeddedResource>
-	</ItemGroup>
-
-	<ItemGroup>
-		<PackageReference Include="System.Numerics.Vectors" Version="4.5.0" />
-		<PackageReference Include="Uno.SourceGenerationTasks" />
 	</ItemGroup>
 
 	<ItemGroup>
