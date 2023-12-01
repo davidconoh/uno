@@ -31,13 +31,11 @@ namespace Windows.UI.Xaml.Media
 			oldValue?.Dispose();
 			_imageSourceChanged = true;
 			_onImageLoaded?.Invoke();
-			return;
 		}
 
-
-		protected override Paint GetPaintInner(Rect drawRect)
+		private protected override void ApplyToPaintInner(Rect drawRect, Paint paint)
 		{
-			throw new NotSupportedException($"{nameof(GetPaintInner)} is not supported for ImageBrush.");
+			throw new NotSupportedException($"{nameof(ApplyToPaintInner)} is not supported for ImageBrush.");
 		}
 
 		internal void ScheduleRefreshIfNeeded(Windows.Foundation.Rect drawRect, Action onImageLoaded)
@@ -79,7 +77,11 @@ namespace Windows.UI.Xaml.Media
 			{
 				try
 				{
-					var image = await imageSource.Open(ct, targetWidth: (int)drawRect.Width, targetHeight: (int)drawRect.Height);
+					var image = await imageSource.Open(ct,
+						targetImage: null,
+						targetWidth: (int)drawRect.Width,
+						targetHeight: (int)drawRect.Height);
+
 					if (image.Bitmap != null || imageSource.IsImageLoadedToUiDirectly)
 					{
 						OnImageOpened();

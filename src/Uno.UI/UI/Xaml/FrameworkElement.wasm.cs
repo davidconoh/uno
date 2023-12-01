@@ -110,22 +110,13 @@ namespace Windows.UI.Xaml
 			}
 		}
 
-		public bool HasParent()
+		internal bool HasParent()
 			=> Parent != null;
 
 		public double ActualWidth => GetActualWidth();
 		public double ActualHeight => GetActualHeight();
 
 		public event SizeChangedEventHandler SizeChanged;
-
-		internal void RaiseSizeChanged(SizeChangedEventArgs args)
-		{
-			SizeChanged?.Invoke(this, args);
-			_renderTransform?.UpdateSize(args.NewSize);
-		}
-
-		internal void SetActualSize(Size size)
-			=> AssignedActualSize = size;
 
 		private event TypedEventHandler<FrameworkElement, object> _loading;
 		public event TypedEventHandler<FrameworkElement, object> Loading
@@ -216,11 +207,8 @@ namespace Windows.UI.Xaml
 
 		public IEnumerator GetEnumerator() => _children.GetEnumerator();
 
-		protected void SetCornerRadius(CornerRadius cornerRadius)
-			=> BorderLayerRenderer.SetCornerRadius(this, cornerRadius);
-
-		protected void SetBorder(Thickness thickness, Brush brush)
-			=> BorderLayerRenderer.SetBorder(this, thickness, brush);
+		private protected void SetBorder(Thickness thickness, Brush brush, CornerRadius cornerRadius)
+			=> BorderLayerRenderer.SetBorder(this, thickness, brush, cornerRadius);
 
 		partial void OnBackgroundSizingChangedPartial(DependencyPropertyChangedEventArgs dependencyPropertyChangedEventArgs)
 		{
@@ -230,12 +218,31 @@ namespace Windows.UI.Xaml
 			}
 		}
 
-		internal override bool IsEnabledOverride() => IsEnabled && base.IsEnabledOverride();
+		#region Name Dependency Property
 
-		/// <summary>
-		/// Identifies the Name dependency property.
-		/// </summary>
-		public static new DependencyProperty NameProperty => UIElement.NameProperty;
+		private void OnNameChanged(string oldValue, string newValue)
+		{
+			if (FrameworkElementHelper.IsUiAutomationMappingEnabled)
+			{
+				Windows.UI.Xaml.Automation.AutomationProperties.SetAutomationId(this, newValue);
+			}
+
+			if (FeatureConfiguration.UIElement.AssignDOMXamlName)
+			{
+				Uno.UI.Xaml.WindowManagerInterop.SetName(HtmlId, newValue);
+			}
+		}
+
+		[GeneratedDependencyProperty(DefaultValue = "", ChangedCallback = true)]
+		public static DependencyProperty NameProperty { get; } = CreateNameProperty();
+
+		public string Name
+		{
+			get => GetNameValue();
+			set => SetNameValue(value);
+		}
+
+		#endregion
 
 		#region Margin Dependency Property
 		[GeneratedDependencyProperty(
@@ -246,7 +253,7 @@ namespace Windows.UI.Xaml
 		)]
 		public static DependencyProperty MarginProperty { get; } = CreateMarginProperty();
 
-		public virtual Thickness Margin
+		public Thickness Margin
 		{
 			get => GetMarginValue();
 			set => SetMarginValue(value);
@@ -422,7 +429,11 @@ namespace Windows.UI.Xaml
 				UpdateDOMXamlProperty(nameof(MinHeight), MinHeight);
 				UpdateDOMXamlProperty(nameof(MaxWidth), MaxWidth);
 				UpdateDOMXamlProperty(nameof(MaxHeight), MaxHeight);
-				UpdateDOMXamlProperty(nameof(IsEnabled), IsEnabled);
+
+				if (this is Control control)
+				{
+					UpdateDOMXamlProperty(nameof(Control.IsEnabled), control.IsEnabled);
+				}
 
 				if (this.TryGetPadding(out var padding))
 				{
@@ -431,16 +442,6 @@ namespace Windows.UI.Xaml
 
 				base.UpdateDOMProperties();
 			}
-		}
-
-		public override string ToString()
-		{
-			if (FeatureConfiguration.UIElement.RenderToStringWithId && !Name.IsNullOrEmpty())
-			{
-				return $"{base.ToString()}\"{Name}\"";
-			}
-
-			return base.ToString();
 		}
 	}
 }

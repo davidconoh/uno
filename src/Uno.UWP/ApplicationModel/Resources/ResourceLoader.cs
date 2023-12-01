@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Xml.Linq;
 using Uno;
 using Uno.Extensions;
 using Uno.Foundation.Logging;
@@ -32,27 +33,52 @@ namespace Windows.ApplicationModel.Resources
 
 		private readonly Dictionary<string, Dictionary<string, string>> _resources = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
 
-		public ResourceLoader(string name)
+		public ResourceLoader() : this(DefaultResourceLoaderName, true)
 		{
-			LoaderName = name;
 		}
 
-		internal string LoaderName { get; }
+		public ResourceLoader(string name) : this(name, true)
+		{
+		}
 
-		public ResourceLoader()
+		/// <summary>
+		/// Creates a loader with a given name.
+		/// If the loader does not exist yet, it can add it if requested.
+		/// </summary>
+		/// <param name="name">Name of the loader.</param>
+		/// <param name="addLoader">
+		/// A value indicating whether the loader
+		/// should be added to the list of loaders.
+		/// </param>
+		private ResourceLoader(string name, bool addLoader)
 		{
 			if (_log.IsEnabled(LogLevel.Debug))
 			{
-				_log.LogDebug($"Initializing ResourceLoader (CurrentUICulture: {CultureInfo.CurrentUICulture})");
+				_log.LogDebug($"Initializing ResourceLoader {name} (CurrentUICulture: {CultureInfo.CurrentUICulture})");
+			}
+
+			LoaderName = name;
+
+			if (_loaders.TryGetValue(name, out var existingLoader))
+			{
+				// If there is already a loader with the same name,
+				// they should share the same resources.
+				_resources = existingLoader._resources;
+			}
+			else if (addLoader)
+			{
+				_loaders[name] = this;
 			}
 		}
+
+		internal string LoaderName { get; }
 
 		public string GetString(string resource)
 		{
 			// "/[file]/[name]" format support
 			if (resource.ElementAtOrDefault(0) == '/')
 			{
-				var separatorIndex = resource.IndexOf("/", 1, StringComparison.Ordinal);
+				var separatorIndex = resource.IndexOf('/', 1);
 				if (separatorIndex < 1)
 				{
 					return "";
@@ -74,17 +100,7 @@ namespace Windows.ApplicationModel.Resources
 				}
 			}
 
-			// Finally try to fallback on the native localization system
-#if !UNO_REFERENCE_API && !NET461
-			if (GetStringInternal == null)
-			{
-				throw new InvalidOperationException($"ResourceLoader.GetStringInternal hasn't been set. Make sure ResourceHelper is initialized properly.");
-			}
-
-			return GetStringInternal.Invoke(resource);
-#else
 			return string.Empty;
-#endif
 		}
 
 		private bool FindForCulture(string culture, string resource, out string resourceValue)
@@ -109,19 +125,16 @@ namespace Windows.ApplicationModel.Resources
 		[NotImplemented]
 		public string GetStringForUri(Uri uri) { throw new NotSupportedException(); }
 
-		public static ResourceLoader GetForCurrentView() => GetNamedResourceLoader(DefaultResourceLoaderName);
+		public static ResourceLoader GetForCurrentView() => GetOrCreateNamedResourceLoader(DefaultResourceLoaderName);
 
-		public static ResourceLoader GetForCurrentView(string name) => GetNamedResourceLoader(name);
+		public static ResourceLoader GetForCurrentView(string name) => GetOrCreateNamedResourceLoader(name);
 
-		public static ResourceLoader GetForViewIndependentUse() => GetNamedResourceLoader(DefaultResourceLoaderName);
+		public static ResourceLoader GetForViewIndependentUse() => GetOrCreateNamedResourceLoader(DefaultResourceLoaderName);
 
-		public static ResourceLoader GetForViewIndependentUse(string name) => GetNamedResourceLoader(name);
+		public static ResourceLoader GetForViewIndependentUse(string name) => GetOrCreateNamedResourceLoader(name);
 
 		[NotImplemented]
 		public static string GetStringForReference(Uri uri) { throw new NotSupportedException(); }
-
-		// TODO: Remove this property when getting rid of ResourceHelper
-		public static Func<string, string> GetStringInternal { get; set; }
 
 		/// <summary>
 		/// Provides the default culture if CurrentUICulture cannot provide it.
@@ -287,7 +300,7 @@ namespace Windows.ApplicationModel.Resources
 				// Currently only load the resources for the current culture.
 				if (currentCultures.Contains(culture))
 				{
-					var loader = GetNamedResourceLoader(name);
+					var loader = GetOrCreateNamedResourceLoader(name);
 					if (!loader._resources.TryGetValue(culture, out var resources))
 					{
 						loader._resources[culture] = resources = new Dictionary<string, string>();
@@ -335,7 +348,7 @@ namespace Windows.ApplicationModel.Resources
 			}
 		}
 
-		private static ResourceLoader GetNamedResourceLoader(string name)
-			=> _loaders.FindOrCreate(name, () => new ResourceLoader(name));
+		private static ResourceLoader GetOrCreateNamedResourceLoader(string name) =>
+			_loaders.FindOrCreate(name, () => new ResourceLoader(name, addLoader: false));
 	}
 }

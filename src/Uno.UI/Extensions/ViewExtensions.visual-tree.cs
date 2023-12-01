@@ -1,9 +1,5 @@
 ﻿#nullable enable
 
-#if NETSTANDARD2_0 || NETCOREAPP2_0 || NETCOREAPP2_1 || NETCOREAPP2_2 || NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48
-#define NULLABLE_ATTRIBUTE_NOT_SUPPORTED
-#endif
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -72,11 +68,7 @@ public static partial class ViewExtensions
 			.Append($" // {string.Join(", ", GetDetails())}")
 			.ToString();
 
-#if !NULLABLE_ATTRIBUTE_NOT_SUPPORTED
 		bool TryGetDpValue<T>(object owner, string property, [NotNullWhen(true)] out T? value)
-#else
-		bool TryGetDpValue<T>(object owner, string property, out T? value)
-#endif
 		{
 			if (owner is DependencyObject @do &&
 				owner.GetType().GetProperty($"{property}Property", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)?.GetValue(null, null) is DependencyProperty dp)
@@ -207,13 +199,13 @@ public static partial class ViewExtensions
 		}
 	}
 
-	private static IEnumerable<_View> EnumerateChildren(this _View? o)
+	internal static IEnumerable<_View> EnumerateChildren(this _View? o)
 	{
 		if (o is null) return Enumerable.Empty<_View>();
 		return o.Subviews;
 	}
 #elif __ANDROID__
-	private static IEnumerable<_View> EnumerateAncestors(this _View? o)
+	internal static IEnumerable<_View> EnumerateAncestors(this _View? o)
 	{
 		if (o is null) yield break;
 
@@ -223,7 +215,7 @@ public static partial class ViewExtensions
 		}
 	}
 
-	private static IEnumerable<_View> EnumerateChildren(this _View? reference)
+	internal static IEnumerable<_View> EnumerateChildren(this _View? reference)
 	{
 		if (reference is Android.Views.ViewGroup vg)
 		{
@@ -236,7 +228,7 @@ public static partial class ViewExtensions
 		return Enumerable.Empty<_View>();
 	}
 #else
-	private static IEnumerable<_View> EnumerateAncestors(this _View? o)
+	internal static IEnumerable<_View> EnumerateAncestors(this _View? o)
 	{
 		if (o is null) yield break;
 		while (VisualTreeHelper.GetParent(o) is { } parent)
@@ -245,7 +237,7 @@ public static partial class ViewExtensions
 		}
 	}
 
-	private static IEnumerable<_View> EnumerateChildren(this _View? reference)
+	internal static IEnumerable<_View> EnumerateChildren(this _View? reference)
 	{
 		return Enumerable
 			.Range(0, VisualTreeHelper.GetChildrenCount(reference))

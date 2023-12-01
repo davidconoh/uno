@@ -160,13 +160,17 @@ namespace Uno.UI
 			/// instead of weak references for some highly used fields, in common cases to improve the
 			/// overall performance.
 			/// </summary>
-			/// <remarks>
-			/// This feature is disabled on WebAssembly as it reveals or creates a memory corruption issue
-			/// in the garbage collector. This can be revisited when upgrading tests to .NET 5+.
-			/// See https://github.com/unoplatform/uno/issues/4730 for details.
-			/// </remarks>
 			public static bool IsStoreHardReferenceEnabled { get; set; }
 				= true;
+		}
+
+		public static class ResourceDictionary
+		{
+			/// <summary>
+			/// Determines whether unreferenced ResourceDictionary present in the assembly
+			/// are accessible from app resources.
+			/// </summary>
+			public static bool IncludeUnreferencedDictionaries { get; set; }
 		}
 
 		public static class Font
@@ -206,14 +210,6 @@ namespace Uno.UI
 
 		public static class FrameworkElement
 		{
-			[Obsolete("This flag is no longer used.")]
-			[EditorBrowsable(EditorBrowsableState.Never)]
-			public static bool UseLegacyApplyStylePhase { get; set; }
-
-			[Obsolete("This flag is no longer used.")]
-			[EditorBrowsable(EditorBrowsableState.Never)]
-			public static bool ClearPreviousOnStyleChange { get; set; }
-
 #if __ANDROID__
 			/// <summary>
 			/// Controls the propagation of <see cref="Windows.UI.Xaml.FrameworkElement.Loaded"/> and
@@ -225,6 +221,13 @@ namespace Uno.UI
 			/// Setting it to true avoids the use of costly Java->C# interop.
 			/// </remarks>
 			public static bool AndroidUseManagedLoadedUnloaded { get; set; } = true;
+#endif
+
+#if __ANDROID__
+			/// <summary>
+			/// Invalidate native android measure cache when measure-spec has changed since last measure.
+			/// </summary>
+			public static bool InvalidateNativeCacheOnRemeasure { get; set; } = true;
 #endif
 
 			/// <summary>
@@ -348,7 +351,7 @@ namespace Uno.UI
 			/// performance at the expense of consuming more memory and taking longer to initially load. Setting this to null will leave
 			/// the default value at the UWP default of 4.0.
 			/// </summary>
-			public static double? DefaultCacheLength = 1.0;
+			public static double? DefaultCacheLength { get; set; } = 1.0;
 
 #if __IOS__ || __ANDROID__
 			/// <summary>
@@ -370,7 +373,7 @@ namespace Uno.UI
 			/// Sets this value to remove item animation for <see cref="UnoRecyclerView"/>. This prevents <see cref="UnoRecyclerView"/>
 			/// from crashing when pressured: Tmp detached view should be removed from RecyclerView before it can be recycled
 			/// </summary>
-			public static bool RemoveItemAnimator = true;
+			public static bool RemoveItemAnimator { get; set; } = true;
 
 			/// <summary>
 			/// Indicates if a full recycling pass should be achieved on drop (re-order) on a ListView instead of a simple layout pass.
@@ -379,12 +382,12 @@ namespace Uno.UI
 			/// This flag should be kept to 'false' if you turned <see cref="RemoveItemAnimator"/> to 'false'.
 			/// Forcing a recycling pass with ItemAnimator is known to cause a flicker of the whole list.
 			/// </remarks>
-			public static bool ForceRecycleOnDrop;
+			public static bool ForceRecycleOnDrop { get; set; }
 
 			/// <summary>
 			/// Sets a value indicating whether the item snapping will be implemented by the native <see cref="AndroidX.RecyclerView.Widget.SnapHelper"/> or by Uno.
 			/// </summary>
-			public static bool UseNativeSnapHelper = true;
+			public static bool UseNativeSnapHelper { get; set; } = true;
 		}
 #endif
 
@@ -495,6 +498,12 @@ namespace Uno.UI
 			/// <remarks>This feature is used to avoid screenshot comparisons false positives</remarks>
 			public static bool HideCaret { get; set; }
 
+			/// <summary>
+			/// Determines if a native (Gtk/Wpf) TextBox overlay should be used on the skia targets instead of the
+			/// Uno skia-based TextBox implementation.
+			/// </summary>
+			public static bool UseOverlayOnSkia { get; set; } = true;
+
 #if __ANDROID__
 			/// <summary>
 			/// The legacy <see cref="Windows.UI.Xaml.Controls.TextBox.InputScope"/> prevents invalid input on hardware keyboard.
@@ -591,12 +600,13 @@ namespace Uno.UI
 			/// </summary>
 			public static bool UseInvalidateArrangePath { get; set; } = true;
 
+#if __ANDROID__
 			/// <summary>
-			/// [DEPRECATED]
-			/// Not used anymore, does nothing.
+			/// On Android, rollback the clipping to the previous behavior, which was to apply the clipping
+			/// on the assigned children bounds instead of the parent bounds. 
 			/// </summary>
-			[NotImplemented]
-			public static bool UseLegacyClipping { get; set; } = true;
+			public static bool UseLegacyClipping { get; set; }
+#endif
 
 			/// <summary>
 			/// Enable the visualization of clipping bounds (intended for diagnostic purposes).
@@ -640,6 +650,12 @@ namespace Uno.UI
 			/// </remarks>
 			public static bool AlwaysClipNativeChildren { get; set; } = true;
 #endif
+
+			/// <summary>
+			/// For non-holding pointer events, use CompleteGesture when bubbling gesture events.
+			/// This defaults to false, which prevents the specific event instead of calling CompleteGesture
+			/// </summary>
+			public static bool DisablePointersSpecificEventPrevention { get; set; }
 		}
 
 		public static class VisualState
@@ -668,16 +684,6 @@ namespace Uno.UI
 
 		public static class Xaml
 		{
-			/// <summary>
-			/// Maximal "BasedOn" recursive resolution depth.
-			/// </summary>
-			/// <remarks>
-			/// This is a mechanism to prevent hard-to-diagnose stack overflow when a resource name is not found.
-			/// </remarks>
-			[Obsolete("This flag is no longer used.")]
-			[EditorBrowsable(EditorBrowsableState.Never)]
-			public static int MaxRecursiveResolvingDepth { get; set; } = 12;
-
 			/// <summary>
 			/// By default, XAML hot reload will be enabled when building in debug. Setting this flag to 'true' will force it to be disabled.
 			/// </summary>
@@ -770,6 +776,15 @@ namespace Uno.UI
 			/// </summary>
 			public static bool UseHandForInteraction { get; set; } = true;
 #endif
+		}
+
+		public static class Timeline
+		{
+			/// <summary>
+			/// Determines if the default animation starting value
+			/// will be from the animated value or local value, when the From property is omitted.
+			/// </summary>
+			public static bool DefaultsStartingValueFromAnimatedValue { get; } = true;
 		}
 	}
 }

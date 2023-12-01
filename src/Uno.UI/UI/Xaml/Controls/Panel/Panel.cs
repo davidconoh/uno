@@ -11,20 +11,21 @@ using Windows.UI.Core;
 using Windows.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Controls;
 using Uno.UI.Xaml;
-#if XAMARIN_ANDROID
+#if __ANDROID__
 using View = Android.Views.View;
-#elif XAMARIN_IOS_UNIFIED
+#elif __IOS__
 using View = UIKit.UIView;
-#elif XAMARIN_IOS
-using View = MonoTouch.UIKit.UIView;
 #endif
 
 namespace Windows.UI.Xaml.Controls
 {
 	[Markup.ContentProperty(Name = "Children")]
-	public partial class Panel : FrameworkElement, ICustomClippingElement, IPanel
+	public partial class Panel : FrameworkElement, IPanel
+#if !__CROSSRUNTIME__ && !IS_UNIT_TESTS
+		, ICustomClippingElement
+#endif
 	{
-#if NET461 || UNO_REFERENCE_API
+#if IS_UNIT_TESTS || UNO_REFERENCE_API
 		private new UIElementCollection _children;
 #else
 		private UIElementCollection _children;
@@ -108,11 +109,41 @@ namespace Windows.UI.Xaml.Controls
 
 		#endregion
 
+		/// <summary>
+		/// Panels don't have an Orientation in UWP, but many derived types do.
+		/// This should be overriden by the derived types to refer to match their
+		/// own Orientation. We don't set a default here since different scenarios
+		/// use different defaults. E.g. ListView assumes a vertical orientation
+		/// for keyboard navigation by default, but ItemsPresenter assumes a
+		/// horizontal orientation for header/footer placement.
+		/// </summary>
+		internal virtual Orientation? InternalOrientation { get; }
+
 		internal Thickness PaddingInternal { get; set; }
 
 		internal Thickness BorderThicknessInternal { get; set; }
 
-		internal Brush BorderBrushInternal { get; set; }
+		private Brush _borderBrushInternal;
+
+		internal Brush BorderBrushInternal
+		{
+			get => _borderBrushInternal;
+			set
+			{
+#if __WASM__
+				if (((_borderBrushInternal is null) ^ (value is null)) && BorderThicknessInternal != default)
+				{
+					// The transition from null to non-null (and vice-versa) affects child arrange on Wasm when non-zero BorderThickness is specified.
+					foreach (var child in _children)
+					{
+						child.InvalidateArrange();
+					}
+				}
+#endif
+
+				_borderBrushInternal = value;
+			}
+		}
 
 		internal CornerRadius CornerRadiusInternal { get; set; }
 

@@ -22,28 +22,37 @@ namespace SamplesApp.UITests.Windows_UI_Xaml.DragAndDropTests
 		[Test]
 		[AutoRetry]
 		[ActivePlatforms(Platform.Browser)] // TODO: support drag-and-drop testing on mobile https://github.com/unoplatform/Uno.UITest/issues/31
-		public void When_Disabled()
+		public async Task When_Disabled()
 		{
 			Run("UITests.Windows_UI_Xaml.DragAndDrop.DragDrop_ListView", skipInitialScreenshot: true);
 
 			var sut = _app.Marked("SUT");
 			var mode = _app.Marked("DragMode");
 
+			_app.WaitForElement(sut);
+			await Task.Delay(250); // wait out the EntranceThemeTransition (duration=100)
+
+			// Disable re-ordering
 			mode.SetDependencyPropertyValue("IsChecked", "False");
+
+			// Tap outside the ListView to get rid of PointerOver visual from the step above
+			var sutBounds = _app.Query(sut).Single().Rect;
+			_app.TapCoordinates(sutBounds.CenterX, sutBounds.Bottom + 10);
 
 			var before = TakeScreenshot("Before", ignoreInSnapshotCompare: true);
 
-			// Attempt to re-order
-			var sutBounds = _app.Query(sut).Single().Rect;
+			// Attempt to re-order by dragging from item1 (orange) to item3 (green)
 			var x = sutBounds.X + 50;
 			var srcY = Item(sutBounds, 1);
 			var dstY = Item(sutBounds, 3);
-
 			_app.DragCoordinates(x, srcY, x, dstY);
+
+			// Tap outside the ListView to get rid of PointerOver visual from the step above
+			_app.TapCoordinates(sutBounds.CenterX, sutBounds.Bottom + 10);
 
 			var after = TakeScreenshot("After", ignoreInSnapshotCompare: true);
 
-			// note: we test only 100 pixels width to avoid failure due to scrollbar being visible in "after" screenshot
+			// note: we only test the left-most 100 pixels width to avoid failure due to scrollbar being visible in "after" screenshot
 			var testBounds = new Rectangle((int)sutBounds.X, (int)sutBounds.Y, 100, (int)sutBounds.Height);
 			ImageAssert.AreEqual(before, after, testBounds);
 		}
@@ -79,7 +88,6 @@ namespace SamplesApp.UITests.Windows_UI_Xaml.DragAndDropTests
 		public void When_Reorder_To_Last() => Test_Reorder(3, 5);
 
 		[Test]
-		[Ignore("Flaky test. Tracked by https://github.com/unoplatform/uno/issues/9080")]
 		[AutoRetry]
 		[ActivePlatforms(Platform.Browser)] // TODO: support drag-and-drop testing on mobile https://github.com/unoplatform/Uno.UITest/issues/31
 		public void When_Reorder_To_Last_2() => Test_Reorder(3, 6 /* out of range */, expectedTo: 5);

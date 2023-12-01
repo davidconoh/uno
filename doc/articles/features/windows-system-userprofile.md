@@ -1,4 +1,13 @@
-﻿# Uno Support for Windows.System.UserProfile APIs
+﻿---
+uid: Uno.Features.WSUserProfile
+---
+
+# Windows.System.UserProfile APIs
+
+> [!TIP]
+> This article covers Uno-specific information for `Windows.System.UserProfile` namespace. For a full description of the feature and instructions on using it, consult the UWP documentation: https://learn.microsoft.com/en-us/uwp/api/windows.system.userprofile
+
+* The `Windows.System.UserProfile.UserProfilePersonalizationSettings` class provides functionality for setting the lock screen and wallpaper images.
 
 ## `UserProfilePersonalizationSettings`
 

@@ -1,4 +1,4 @@
-﻿#if !NET461 && !UNO_REFERENCE_API
+﻿#if !IS_UNIT_TESTS && !UNO_REFERENCE_API
 using System;
 using System.Numerics;
 using System.Threading;
@@ -13,7 +13,7 @@ using Windows.UI.Core;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
 
-#if XAMARIN_IOS
+#if __IOS__
 using UIKit;
 #endif
 
@@ -56,22 +56,50 @@ namespace Windows.UI.Xaml.Controls
 			public const int Image_SetImageStop = 6;
 		}
 
-		protected virtual void OnImageFailed(ImageSource imageSource)
+		private protected void OnImageFailed(ImageSource imageSource, Exception exception)
 		{
 			if (this.Log().IsEnabled(Uno.Foundation.Logging.LogLevel.Debug))
 			{
-				this.Log().Debug(this.ToString() + " Image failed to open");
+				if (exception is null)
+				{
+					this.Log().Debug($"Image '{this}' failed to open");
+				}
+				else
+				{
+					this.Log().Debug($"Image '{this}' failed to open: {exception}");
+				}
 			}
 
-			ImageFailed?.Invoke(this, new ExceptionRoutedEventArgs(this, "Image failed to download"));
+#if !__SKIA__ && !__WASM__ // TODO: Have consistent handling on Wasm and Skia.
+			if (imageSource is BitmapImage bitmapImage && exception is not null)
+			{
+				bitmapImage.RaiseImageFailed(exception);
+			}
+#endif
+
+			if (exception is null)
+			{
+				ImageFailed?.Invoke(this, new ExceptionRoutedEventArgs(this, "Image failed to download"));
+			}
+			else
+			{
+				ImageFailed?.Invoke(this, new ExceptionRoutedEventArgs(this, "Image failed to download: " + exception.ToString()));
+			}
 		}
 
-		protected virtual void OnImageOpened(ImageSource imageSource)
+		private void OnImageOpened(ImageSource imageSource)
 		{
 			if (this.Log().IsEnabled(Uno.Foundation.Logging.LogLevel.Debug))
 			{
 				this.Log().Debug(this.ToString() + " Image opened successfully");
 			}
+
+#if !__SKIA__ && !__WASM__ // TODO: Have consistent handling on Wasm and Skia.
+			if (imageSource is BitmapImage bitmapImage)
+			{
+				bitmapImage.RaiseImageOpened();
+			}
+#endif
 
 			ImageOpened?.Invoke(this, new RoutedEventArgs(this));
 			_successfullyOpenedImage = imageSource;
@@ -90,7 +118,7 @@ namespace Windows.UI.Xaml.Controls
 				wb.Invalidated += OnInvalidated;
 				_sourceDisposable.Disposable = Disposable.Create(() => wb.Invalidated -= OnInvalidated);
 
-				void OnInvalidated(object sdn, EventArgs args)
+				void OnInvalidated()
 				{
 					_openedSource = null;
 					TryOpenImage();
@@ -457,7 +485,7 @@ namespace Windows.UI.Xaml.Controls
 			}
 #endif
 
-			return base.ArrangeOverride(finalSize);
+			return ArrangeFirstChild(finalSize);
 		}
 	}
 }

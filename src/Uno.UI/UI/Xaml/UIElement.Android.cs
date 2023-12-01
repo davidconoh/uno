@@ -5,6 +5,7 @@ using Uno.UI.Xaml.Input;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using AndroidX.Core.View;
 using Windows.Foundation;
@@ -58,18 +59,12 @@ namespace Windows.UI.Xaml
 			ComputeAreChildrenNativeViewsOnly();
 		}
 
-		/// <summary>
-		/// Invoked when a child view has been added.
-		/// </summary>
-		/// <param name="view">The view being removed</param>
+		/// <inheritdoc />
 		protected override void OnChildViewAdded(View view)
 		{
 			if (view is UIElement uiElement)
 			{
-				uiElement.ResetLayoutFlags();
-				SetLayoutFlags(LayoutFlag.MeasureDirty);
-				uiElement.SetLayoutFlags(LayoutFlag.MeasureDirty);
-				uiElement.IsMeasureDirtyPathDisabled = IsMeasureDirtyPathDisabled;
+				OnChildManagedViewAddedOrRemoved(uiElement);
 			}
 			else
 			{
@@ -77,6 +72,29 @@ namespace Windows.UI.Xaml
 			}
 
 			ComputeAreChildrenNativeViewsOnly();
+		}
+
+		/// <inheritdoc />
+		protected override void OnChildViewRemoved(View view)
+		{
+			if (view is UIElement uiElement)
+			{
+				OnChildManagedViewAddedOrRemoved(uiElement);
+			}
+			else
+			{
+				_nativeChildrenCount--;
+			}
+
+			ComputeAreChildrenNativeViewsOnly();
+		}
+
+		private void OnChildManagedViewAddedOrRemoved(UIElement uiElement)
+		{
+			uiElement.ResetLayoutFlags();
+			SetLayoutFlags(LayoutFlag.MeasureDirty);
+			uiElement.SetLayoutFlags(LayoutFlag.MeasureDirty);
+			uiElement.IsMeasureDirtyPathDisabled = IsMeasureDirtyPathDisabled;
 		}
 
 		public UIElement()
@@ -169,7 +187,18 @@ namespace Windows.UI.Xaml
 
 			ViewCompat.SetClipBounds(this, physicalRect);
 
-			SetClipChildren(NeedsClipToSlot);
+			if (FeatureConfiguration.UIElement.UseLegacyClipping)
+			{
+				// Old way: apply the clipping for each child on their assigned slot
+				SetClipChildren(NeedsClipToSlot);
+			}
+			else
+			{
+				// "New" correct way: apply the clipping on the parent,
+				// and let the children overflow inside the parent's bounds
+				// This is closer to the XAML way of doing clipping.
+				SetClipToPadding(NeedsClipToSlot);
+			}
 		}
 
 		/// <summary>
@@ -237,7 +266,7 @@ namespace Windows.UI.Xaml
 		/// Note: Offsets are only an approximation which does not take in consideration possible transformations
 		///	applied by a 'ViewGroup' between this element and its parent UIElement.
 		/// </summary>
-		private bool TryGetParentUIElementForTransformToVisual(out UIElement parentElement, ref double offsetX, ref double offsetY)
+		private bool TryGetParentUIElementForTransformToVisual(out UIElement parentElement, ref Matrix3x2 matrix)
 		{
 			var parent = this.GetVisualTreeParent();
 			switch (parent)
@@ -261,17 +290,17 @@ namespace Windows.UI.Xaml
 					// cf. https://github.com/unoplatform/uno/issues/2754
 
 					// 1. Undo what was done by the shared code
-					offsetX -= LayoutSlotWithMarginsAndAlignments.X;
-					offsetY -= LayoutSlotWithMarginsAndAlignments.Y;
+					matrix.M31 -= (float)LayoutSlotWithMarginsAndAlignments.X;
+					matrix.M32 -= (float)LayoutSlotWithMarginsAndAlignments.Y;
 
 					// 2.Natively compute the offset of this current item relative to this ScrollViewer and adjust offsets
 					var sv = lv.FindFirstParent<ScrollViewer>();
 					var offset = GetPosition(this, relativeTo: sv);
-					offsetX += offset.X;
-					offsetY += offset.Y;
+					matrix.M31 += (float)offset.X;
+					matrix.M32 += (float)offset.Y;
 
 					// We return the parent of the ScrollViewer, so we bypass the <Horizontal|Vertical>Offset (and the Scale) handling in shared code.
-					return sv.TryGetParentUIElementForTransformToVisual(out parentElement, ref offsetX, ref offsetY);
+					return sv.TryGetParentUIElementForTransformToVisual(out parentElement, ref matrix);
 
 				case View view: // Android.View and Android.IViewParent
 					var windowToFirstParent = new int[2];
@@ -291,8 +320,8 @@ namespace Windows.UI.Xaml
 								eltParent.GetLocationInWindow(windowToEltParent);
 
 								parentElement = eltParent;
-								offsetX += ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[0] - windowToEltParent[0]);
-								offsetY += ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[1] - windowToEltParent[1]);
+								matrix.M31 += (float)ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[0] - windowToEltParent[0]);
+								matrix.M32 += (float)ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[1] - windowToEltParent[1]);
 								return true;
 
 							case null:
@@ -300,8 +329,8 @@ namespace Windows.UI.Xaml
 								// so we adjust offsets using the X/Y position of the original 'view' in the window.
 
 								parentElement = null;
-								offsetX += ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[0]);
-								offsetY += ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[1]);
+								matrix.M31 += (float)ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[0]);
+								matrix.M32 += (float)ViewHelper.PhysicalToLogicalPixels(windowToFirstParent[1]);
 								return false;
 						}
 					} while (true);

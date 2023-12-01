@@ -114,8 +114,8 @@ namespace Windows.UI.Xaml.Media.Animation
 				);
 			}
 
-			// We explicitly call the Stop of the _frameScheduler befire teh Reste dispose it,
-			// so the EndReason will stopped instead of Aborted
+			// We explicitly call the Stop of the _frameScheduler before the Reset dispose it,
+			// so the EndReason will be Stopped instead of Aborted.
 			_frameScheduler?.Stop();
 
 			Reset();
@@ -240,8 +240,7 @@ namespace Windows.UI.Xaml.Media.Animation
 		/// </summary>
 		private void Fill()
 		{
-			var lastTime = KeyFrames.Max(k => k.KeyTime.TimeSpan);
-			var lastKeyFrame = KeyFrames.First(k => k.KeyTime.TimeSpan.Equals(lastTime));
+			var lastKeyFrame = KeyFrames.MaxBy(k => k.KeyTime.TimeSpan);
 
 			_frameScheduler?.Dispose();
 			_frameScheduler = null;
@@ -274,7 +273,7 @@ namespace Windows.UI.Xaml.Media.Animation
 		/// Destroys the animation
 		/// </summary>
 		/// <param name="disposing"></param>
-		protected override void Dispose(bool disposing)
+		private protected override void Dispose(bool disposing)
 		{
 			base.Dispose(disposing);
 

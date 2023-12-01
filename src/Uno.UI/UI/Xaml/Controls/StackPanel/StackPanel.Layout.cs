@@ -7,11 +7,11 @@ using Uno.Foundation.Logging;
 using Uno;
 using Uno.UI;
 
-#if XAMARIN_ANDROID
+#if __ANDROID__
 using View = Android.Views.View;
 using Font = Android.Graphics.Typeface;
 using Android.Graphics;
-#elif XAMARIN_IOS_UNIFIED
+#elif __IOS__
 using UIKit;
 using View = UIKit.UIView;
 using Color = UIKit.UIColor;
@@ -134,7 +134,7 @@ namespace Windows.UI.Xaml.Controls
 					childRectangle.Width = desiredChildSize.Width;
 					childRectangle.Height = Math.Max(arrangeSize.Height, desiredChildSize.Height);
 
-					var snapPoint = (float)childRectangle.Right;
+					var snapPoint = (float)(childRectangle.Right + Margin.Right);
 					snapPointsChanged |= snapPoints[i] == snapPoint;
 					snapPoints[i] = snapPoint;
 				}
@@ -151,7 +151,7 @@ namespace Windows.UI.Xaml.Controls
 					childRectangle.Height = desiredChildSize.Height;
 					childRectangle.Width = Math.Max(arrangeSize.Width, desiredChildSize.Width);
 
-					var snapPoint = (float)childRectangle.Bottom;
+					var snapPoint = (float)(childRectangle.Bottom + Margin.Bottom);
 					snapPointsChanged |= snapPoints[i] == snapPoint;
 					snapPoints[i] = snapPoint;
 				}

@@ -1,3 +1,7 @@
+---
+uid: Uno.Contributing.CreateUITests
+---
+
 # Creating automated UI tests
 
 Internally Uno.UI uses automated UI tests using the [Uno.UITest framework](https://github.com/unoplatform/Uno.UITest). These tests run out-of-process relative to the application itself. They can simulate user interaction, and can also record and verify on-screen pixels.
@@ -19,8 +23,8 @@ UI tests contribute significantly to the CI build time, and for many purposes a 
 
 ## Running UI tests locally
 
-1. Ensure [your environment is configured](../get-started-vs.md) for the platform you want to run on.
-1. Ensure `UnoTargetFrameworkOverride` is set to `MonoAndroid13.0` or `net6.0-android` for testing on Android, `xamarinios` or `net6.0-ios` for testing on iOS, and `net7.0` or `netstandard2.0` for testing on Wasm.
+1. Ensure [your environment is configured](xref:Uno.GetStarted.vs2022) for the platform you want to run on.
+1. Ensure `UnoTargetFrameworkOverride` is set to `net7.0-android` for testing on Android, `net7.0-ios` for testing on iOS, and `net7.0` for testing on Wasm.
 1. Open Uno.UI with the [correct target override and solution filter](building-uno-ui.md) for the platform you want to run on.
 1. [Build and run the SamplesApp](working-with-the-samples-apps.md) at least once.
 1. Only Android and WASM are supported from Visual Studio for Windows. (Running tests on iOS using a Mac is possible, see additional instructions below.)

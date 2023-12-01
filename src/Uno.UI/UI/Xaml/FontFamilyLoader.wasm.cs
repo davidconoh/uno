@@ -2,18 +2,21 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices.JavaScript;
 using System.Threading.Tasks;
 using Uno.Foundation;
 using Uno.Foundation.Logging;
 using Uno.UI.DataBinding;
 using Windows.Storage.Helpers;
 
+using NativeMethods = __Windows.UI.Xaml.Media.FontFamilyLoader.NativeMethods;
+
 namespace Windows.UI.Xaml.Media;
 
 /// <summary>
 /// WebAssembly-specific asynchronous font loader
 /// </summary>
-internal class FontFamilyLoader
+internal partial class FontFamilyLoader
 {
 	private static readonly Dictionary<FontFamily, FontFamilyLoader> _loaders = new(new FontFamilyComparer());
 	private static readonly Dictionary<string, FontFamilyLoader> _loadersFromCssName = new();
@@ -57,6 +60,7 @@ internal class FontFamilyLoader
 	/// <summary>
 	/// Typescript-invoked method to notify that a font has been loaded properly
 	/// </summary>
+	[JSExport]
 	internal static void NotifyFontLoaded(string cssFontName)
 	{
 		if (_loadersFromCssName.TryGetValue(cssFontName, out var loader))
@@ -97,6 +101,7 @@ internal class FontFamilyLoader
 	/// <summary>
 	/// Typescript-invoked method to notify that a font failed to load properly
 	/// </summary>
+	[JSExport]
 	internal static void NotifyFontLoadFailed(string cssFontName)
 	{
 		if (_loadersFromCssName.TryGetValue(cssFontName, out var loader))
@@ -181,11 +186,11 @@ internal class FontFamilyLoader
 
 			if (_fontFamily.ExternalSource is { Length: > 0 })
 			{
-				WebAssemblyRuntime.InvokeJS($"Windows.UI.Xaml.Media.FontFamily.loadFont(\"{_fontFamily.CssFontName}\",\"{_fontFamily.ExternalSource}\")");
+				NativeMethods.LoadFont(_fontFamily.CssFontName, _fontFamily.ExternalSource);
 			}
 			else
 			{
-				WebAssemblyRuntime.InvokeJS($"Windows.UI.Xaml.Media.FontFamily.forceFontUsage(\"{_fontFamily.CssFontName}\")");
+				NativeMethods.ForceFontUsage(_fontFamily.CssFontName);
 			}
 
 			_loadOperation = new TaskCompletionSource<bool>();

@@ -14,6 +14,8 @@ using Uno.UI;
 using System.Runtime.CompilerServices;
 using Windows.UI.Xaml.Input;
 using Uno.UI.Xaml.Core;
+using Uno.UI.Helpers;
+using Uno.Foundation.Logging;
 
 namespace Windows.UI.Xaml.Controls
 {
@@ -54,6 +56,13 @@ namespace Windows.UI.Xaml.Controls
 			if (newValue == null)
 			{
 				CurrentEntry = null;
+			}
+			else if (CurrentEntry is not null)
+			{
+				// This is to support hot reload scenarios - the PageStackEntry 
+				// is used when navigating back to this page as it's maintained in the BackStack
+				CurrentEntry.Instance = newValue as Page;
+				CurrentEntry.SourcePageType = newValue.GetType();
 			}
 		}
 
@@ -272,14 +281,27 @@ namespace Windows.UI.Xaml.Controls
 
 		public bool Navigate(Type sourcePageType, object parameter, NavigationTransitionInfo infoOverride)
 		{
-			var entry = new PageStackEntry(sourcePageType, parameter, infoOverride);
+			var entry = new PageStackEntry(sourcePageType.GetReplacementType(), parameter, infoOverride);
 			return InnerNavigate(entry, NavigationMode.New);
 		}
 
 		private bool InnerNavigate(PageStackEntry entry, NavigationMode mode)
 		{
+			if (_isNavigating)
+			{
+				if (this.Log().IsEnabled(LogLevel.Warning))
+				{
+					this.Log().LogWarning(
+						"Frame is already navigating, ignoring the navigation request." +
+						"Please delay the navigation with await Task.Yield().");
+				}
+				return false;
+			}
+
 			try
 			{
+				_isNavigating = true;
+
 				return InnerNavigateUnsafe(entry, mode);
 			}
 			catch (Exception exception)
@@ -307,8 +329,6 @@ namespace Windows.UI.Xaml.Controls
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool InnerNavigateUnsafe(PageStackEntry entry, NavigationMode mode)
 		{
-			_isNavigating = true;
-
 			// Navigating
 			var navigatingFromArgs = new NavigatingCancelEventArgs(
 				mode,
@@ -432,7 +452,8 @@ namespace Windows.UI.Xaml.Controls
 
 		internal Page EnsurePageInitialized(PageStackEntry entry)
 		{
-			if (entry is { Instance: null } && CreatePageInstanceCached(entry.SourcePageType) is { } page)
+			if (entry is { Instance: null } &&
+				CreatePageInstanceCached(entry.SourcePageType) is { } page)
 			{
 				page.Frame = this;
 				entry.Instance = page;
@@ -487,9 +508,7 @@ namespace Windows.UI.Xaml.Controls
 				return;
 			}
 			uiElement.IsLeavingFrame = true;
-#if !HAS_EXPENSIVE_TRYFINALLY
 			try
-#endif
 			{
 				var focusManager = VisualTree.GetFocusManagerForElement(this);
 				if (focusManager?.FocusedElement is not { } focusedElement)
@@ -513,9 +532,7 @@ namespace Windows.UI.Xaml.Controls
 					(focusedElement as Control)?.UpdateFocusState(FocusState.Unfocused);
 				}
 			}
-#if !HAS_EXPENSIVE_TRYFINALLY
 			finally
-#endif
 			{
 				uiElement.IsLeavingFrame = false;
 			}

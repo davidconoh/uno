@@ -1,4 +1,5 @@
-﻿using System;
+﻿#nullable enable
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -19,7 +20,7 @@ namespace Windows.UI.Xaml.Media
 		internal static readonly bool SupportsAsyncFromBundle;
 		internal static readonly bool SupportsFromBundle;
 
-		private static NSUrlSession _defaultSession;
+		private static NSUrlSession? _defaultSession;
 
 		static ImageSource()
 		{
@@ -49,12 +50,12 @@ namespace Windows.UI.Xaml.Media
 			set => _defaultSession = value;
 		}
 
-		internal string BundleName { get; private set; }
-		internal string BundlePath { get; private set; }
+		internal string? BundleName { get; private set; }
+		internal string? BundlePath { get; private set; }
 
 		static public implicit operator ImageSource(UIImage image) => new ImageSource(image);
 
-		private static UIImage OpenBundleFromString(string bundle)
+		private static UIImage? OpenBundleFromString(string? bundle)
 		{
 			if (!bundle.IsNullOrWhiteSpace())
 			{
@@ -66,28 +67,31 @@ namespace Windows.UI.Xaml.Media
 
 		private ImageData OpenImageDataFromStream()
 		{
-			Stream.Position = 0;
-			using var data = NSData.FromStream(Stream);
-			var nativeImage = UIImage.LoadFromData(data);
-
-			if (nativeImage is not null)
-			{
-				return _imageData = ImageData.FromNative(nativeImage);
-			}
-			else
+			if (Stream is null)
 			{
 				return ImageData.Empty;
 			}
+
+			Stream.Position = 0;
+			using var data = NSData.FromStream(Stream);
+
+			if (data is null || UIImage.LoadFromData(data) is not { } nativeImage)
+			{
+				return _imageData = ImageData.Empty;
+			}
+
+			return _imageData = ImageData.FromNative(nativeImage);
 		}
 
 		private Task<ImageData> OpenImageDataFromFilePathAsync()
 		{
-			var uri = new Uri(FilePath);
-			var nativeImage = UIImage.FromFile(FilePath);
+			if (FilePath is null || UIImage.FromFile(FilePath) is not { } nativeImage)
+			{
+				_imageData = ImageData.Empty;
+				return Task.FromResult(ImageData.Empty);
+			}
 
-			_imageData = nativeImage is not null ?
-				ImageData.FromNative(nativeImage) : ImageData.Empty;
-
+			_imageData = ImageData.FromNative(nativeImage);
 			return Task.FromResult(_imageData);
 		}
 
@@ -119,11 +123,9 @@ namespace Windows.UI.Xaml.Media
 			}
 			else
 			{
-				var localFileUri = await Download(ct, AbsoluteUri);
-
-				if (localFileUri == null)
+				if (AbsoluteUri is null || await Download(ct, AbsoluteUri) is not { } localFileUri)
 				{
-					return ImageData.Empty;
+					return _imageData = ImageData.Empty;
 				}
 
 				if (SupportsAsyncFromBundle)
@@ -191,69 +193,69 @@ namespace Windows.UI.Xaml.Media
 				return;
 			}
 
-			using (var url = new NSUrl(AbsoluteUri.AbsoluteUri))
+			if (AbsoluteUri is null)
 			{
-				using (var request = NSUrlRequest.FromUrl(url))
+				return;
+			}
+
+			using var url = new NSUrl(AbsoluteUri.AbsoluteUri);
+			using var request = NSUrlRequest.FromUrl(url);
+
+			NSUrlSessionDataTask? task;
+			var awaitable = DefaultSession.CreateDataTaskAsync(request, out task);
+			ct.Register(OnCancel);
+
+			try
+			{
+				task.Resume(); // We need to call this manually https://bugzilla.xamarin.com/show_bug.cgi?id=28425#c3
+				var result = await awaitable;
+				task = null;
+
+				if (ct.IsCancellationRequested)
 				{
-					NSUrlSessionDataTask task;
-					var awaitable = DefaultSession.CreateDataTaskAsync(request, out task);
-					ct.Register(OnCancel);
-					try
-					{
-						task.Resume(); // We need to call this manually https://bugzilla.xamarin.com/show_bug.cgi?id=28425#c3
-						var result = await awaitable;
-						task = null;
-						var response = result.Response as NSHttpUrlResponse;
+					return;
+				}
 
-						if (ct.IsCancellationRequested)
-						{
-							return;
-						}
-						else if (!IsSuccessful(response.StatusCode))
-						{
-							if (this.Log().IsEnabled(LogLevel.Error))
-							{
-								this.Log().LogError(NSHttpUrlResponse.LocalizedStringForStatusCode(response.StatusCode));
-							}
-						}
-						else
-						{
-							var image = UIImage.LoadFromData(result.Data);
-							if (image is not null)
-							{
-								_imageData = ImageData.FromNative(image);
-							}
-							else
-							{
-								_imageData = ImageData.Empty;
-							}
-						}
-					}
-					catch (NSErrorException e)
+				if (result.Response is NSHttpUrlResponse response && !IsSuccessful(response.StatusCode))
+				{
+					if (this.Log().IsEnabled(LogLevel.Error))
 					{
-						// This can occur for various reasons: download was cancelled, NSAppTransportSecurity blocks download, host couldn't be resolved...
-						if (ct.IsCancellationRequested)
-						{
-							if (this.Log().IsEnabled(LogLevel.Debug))
-							{
-								this.Log().LogDebug(e.ToString());
-							}
-						}
-						else if (this.Log().IsEnabled(LogLevel.Error))
-						{
-							this.Log().LogError(e.ToString());
-						}
+						this.Log().LogError(NSHttpUrlResponse.LocalizedStringForStatusCode(response.StatusCode));
 					}
-
-					void OnCancel()
+				}
+				else
+				{
+					var image = UIImage.LoadFromData(result.Data);
+					if (image is not null)
 					{
-						// Cancel the current download
-						task?.Cancel();
+						_imageData = ImageData.FromNative(image);
 					}
-
-					bool IsSuccessful(nint status) => status < 300;
+					else
+					{
+						_imageData = ImageData.Empty;
+					}
 				}
 			}
+			catch (NSErrorException e)
+			{
+				// This can occur for various reasons: download was canceled, NSAppTransportSecurity blocks download, the host couldn't be resolved...
+				if (ct.IsCancellationRequested)
+				{
+					if (this.Log().IsEnabled(LogLevel.Debug))
+					{
+						this.Log().LogDebug(e.ToString());
+					}
+				}
+				else if (this.Log().IsEnabled(LogLevel.Error))
+				{
+					this.Log().LogError(e.ToString());
+				}
+			}
+
+			// Cancel the current download
+			void OnCancel() => task?.Cancel();
+
+			bool IsSuccessful(nint status) => status < 300;
 		}
 	}
 }

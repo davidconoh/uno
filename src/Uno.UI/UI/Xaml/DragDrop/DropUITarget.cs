@@ -41,11 +41,8 @@ namespace Windows.UI.Xaml
 		private readonly Dictionary<UIElement, (DragUIOverride uiOverride, DataPackageOperation acceptedOperation)> _pendingDropTargets
 			= new Dictionary<UIElement, (DragUIOverride uiOverride, DataPackageOperation acceptedOperation)>();
 
-		private readonly Window _window;
-
-		public DropUITarget(Window window)
+		public DropUITarget()
 		{
-			_window = window;
 		}
 
 		/// <inheritdoc />
@@ -131,7 +128,7 @@ namespace Windows.UI.Xaml
 				dragInfo.Position,
 				Window.Current.RootElement.XamlRoot, //TODO: Choose proper XamlRoot https://github.com/unoplatform/uno/issues/8978
 				getTestability: GetDropHitTestability,
-				isStale: elt => elt.IsDragOver(dragInfo.SourceId));
+				isStale: new StalePredicate(elt => elt.IsDragOver(dragInfo.SourceId), "IsDragOver"));
 
 			// First raise the drag leave event on stale branch if any.
 			if (target.stale is { } staleBranch)

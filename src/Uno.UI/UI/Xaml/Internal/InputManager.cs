@@ -7,44 +7,63 @@
 using System;
 using Uno.UI.Xaml.Input;
 using Windows.Devices.Input;
+using Windows.UI.Input.Preview.Injection;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Input;
 
-namespace Uno.UI.Xaml.Core
+namespace Uno.UI.Xaml.Core;
+
+internal partial class InputManager : IInputInjectorTarget
 {
-	internal partial class InputManager
+	public InputManager(ContentRoot contentRoot)
 	{
-		private ContentRoot _contentRoot;
+		ContentRoot = contentRoot;
 
-		public InputManager(ContentRoot contentRoot)
-		{
-			_contentRoot = contentRoot;
+		ConstructKeyboardManager();
 
-			InitializeManagedPointers();
-		}
+		ConstructPointerManager();
 
-		partial void InitializeManagedPointers();
+		InitDragAndDrop();
+	}
 
-		//TODO Uno: Set along with user input - this needs to be adjusted soon
-		internal InputDeviceType LastInputDeviceType { get; set; } = InputDeviceType.None;
+	partial void ConstructKeyboardManager();
 
-		internal FocusInputDeviceKind LastFocusInputDeviceKind { get; set; }
+	partial void ConstructPointerManager();
 
-		internal bool ShouldRequestFocusSound()
-		{
-			//TODO Uno: Implement
-			return false;
-		}
+	/// <summary>
+	/// Initialize the InputManager.
+	/// </summary>
+	internal void Initialize(object host)
+	{
+		InitializeKeyboard(host);
+		InitializeManagedPointers(host);
+	}
 
-		internal void NotifyFocusChanged(DependencyObject? focusedElement, bool bringIntoView, bool animateIfBringIntoView)
-		{
-			//TODO Uno: Implement
-		}
+	partial void InitializeKeyboard(object host);
 
-		internal bool LastInputWasNonFocusNavigationKeyFromSIP()
-		{
-			//TODO Uno: Implement
-			return false;
-		}
+	partial void InitializeManagedPointers(object host);
+
+	internal ContentRoot ContentRoot { get; }
+
+	//TODO Uno: Set along with user input - this needs to be adjusted soon
+	internal InputDeviceType LastInputDeviceType { get; set; } = InputDeviceType.None;
+
+	internal FocusInputDeviceKind LastFocusInputDeviceKind { get; set; }
+
+	internal bool ShouldRequestFocusSound()
+	{
+		//TODO Uno: Implement
+		return false;
+	}
+
+	internal void NotifyFocusChanged(DependencyObject? focusedElement, bool bringIntoView, bool animateIfBringIntoView)
+	{
+		//TODO Uno: Implement
+	}
+
+	internal bool LastInputWasNonFocusNavigationKeyFromSIP()
+	{
+		//TODO Uno: Implement
+		return false;
 	}
 }

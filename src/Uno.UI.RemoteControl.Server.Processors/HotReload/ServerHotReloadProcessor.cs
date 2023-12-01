@@ -27,7 +27,7 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 			_remoteControlServer = remoteControlServer;
 		}
 
-		public string Scope => "hotreload";
+		public string Scope => HotReloadConstants.HotReload;
 
 		public Task ProcessFrame(Frame frame)
 		{
@@ -63,9 +63,7 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 				this.Log().LogDebug($"Xaml Search Paths: {string.Join(", ", configureServer.XamlPaths)}");
 			}
 
-#if NET6_0_OR_GREATER
 			InitializeMetadataUpdater(configureServer);
-#endif
 
 			_watchers = configureServer.XamlPaths
 				.Select(p => new FileSystemWatcher
@@ -113,9 +111,15 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 					.Buffer(TimeSpan.FromMilliseconds(250))
 					.Subscribe(filePaths =>
 					{
-						foreach (var file in filePaths.Distinct().Where(f => Path.GetExtension(f).Equals(".xaml", StringComparison.OrdinalIgnoreCase)))
+						var files = filePaths
+							.Distinct()
+							.Where(f =>
+								Path.GetExtension(f).Equals(".xaml", StringComparison.OrdinalIgnoreCase)
+								|| Path.GetExtension(f).Equals(".cs", StringComparison.OrdinalIgnoreCase));
+
+						foreach (var file in filePaths)
 						{
-							OnXamlFileChanged(file);
+							OnSourceFileChanged(file);
 						}
 					}, e => Console.WriteLine($"Error {e}"));
 
@@ -123,7 +127,7 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 			}
 		}
 
-		private void OnXamlFileChanged(string fullPath)
+		private void OnSourceFileChanged(string fullPath)
 			=> Task.Run(async () =>
 			{
 				if (this.Log().IsEnabled(LogLevel.Debug))
@@ -151,7 +155,6 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 				}
 			}
 
-#if NET6_0_OR_GREATER
 			_solutionWatcherEventsDisposable?.Dispose();
 			if (_solutionWatchers != null)
 			{
@@ -160,7 +163,8 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 					watcher.Dispose();
 				}
 			}
-#endif
+
+			_hotReloadService?.EndSession();
 		}
 	}
 }

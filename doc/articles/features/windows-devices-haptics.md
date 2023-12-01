@@ -1,4 +1,13 @@
-# Uno Support for `Windows.Devices.Haptics`
+---
+uid: Uno.Features.WDHaptics
+---
+
+# Haptics
+
+> [!TIP]
+> This article covers Uno-specific information for `Windows.Devices.Haptics` namespace. For a full description of the feature and instructions on using it, consult the UWP documentation: https://learn.microsoft.com/en-us/uwp/api/windows.devices.haptics
+
+* The `Windows.Devices.Haptics` namespace provides classes for accessing and managing vibration devices and haptic feedback.
 
 ## `VibrationDevice`
 

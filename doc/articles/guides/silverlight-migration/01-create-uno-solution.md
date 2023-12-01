@@ -1,3 +1,7 @@
+---
+uid: Uno.SilverlightMigration.CreateUnoSolution
+---
+
 # Create the Uno solution for UWP and WASM
 
 You can use the dotnet cli templates to create an Uno solution with just the project heads you requires. Alternatively, you can create the solution using the Visual Studio templates and just delete the project heads you don't require.
@@ -13,7 +17,7 @@ You can use the dotnet cli templates to create an Uno solution with just the pro
 1. To install the Uno dotnet cli templates, enter the following command:
 
     ```powershell
-    dotnet new -i Uno.ProjectTemplates.Dotnet
+    dotnet new -i Uno.Templates
     ```
 
 1. To create the Uno solution with just UWP and WASM heads, enter the following command:
@@ -45,7 +49,7 @@ When working with Uno, it is important to ensure that the latest and greatest ve
 
     * **Uno.Core**
     * **Uno.WinUI** (or **Uno.UI**)
-    * **Uno.WinUI.RemoteControl** (or **Uno.UI.RemoteControl**)
+    * **Uno.WinUI.DevServer** (or **Uno.UI.DevServer**)
     * **Uno.WinUI.WebAssembly** (or **Uno.UI.WebAssembly**)
     * **Uno.Wasm.Bootstrap**
     * **Uno.Wasm.Bootstrap.DevServer**
@@ -99,7 +103,7 @@ There are a few steps to adding WinUI 2.5 to the Uno project:
 
 1. To update the UWP target version, right-click the UWP head project and click **Properties**.
 
-1. In the **Application** settings, update **Target version** and **Min version** to a **Windows 10, version 1903 (10.0; Build 18362)** or later.
+1. In the **Application** settings, update **Target version** and **Min version** to a **Windows 10, version 1903 (10.0; Build 19041)** or later.
 
     > [!NOTE]
     > Visual Studio will prompt to reload the project when you update the **Target version**.

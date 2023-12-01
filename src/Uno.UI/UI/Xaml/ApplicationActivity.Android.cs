@@ -7,11 +7,9 @@ using Android.Graphics;
 using Android.OS;
 using Android.Views;
 using Android.Views.InputMethods;
-
-using Uno.AuthenticationBroker;
-using Uno.Extensions;
 using Uno.Foundation.Logging;
 using Uno.Gaming.Input.Internal;
+using Uno.Helpers.Theming;
 using Uno.UI;
 using Windows.Devices.Sensors;
 using Windows.Gaming.Input;
@@ -19,15 +17,18 @@ using Windows.Graphics.Display;
 using Windows.Security.Authentication.Web;
 using Windows.Storage.Pickers;
 using Windows.System;
+using Windows.UI.Core;
 using Windows.UI.ViewManagement;
+using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using WinUICoreServices = Uno.UI.Xaml.Core.CoreServices;
+
 
 namespace Windows.UI.Xaml
 {
 	[Activity(ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode, WindowSoftInputMode = SoftInput.AdjustPan | SoftInput.StateHidden)]
 	public class ApplicationActivity : Controls.NativePage, Uno.UI.Composition.ICompositionRoot
 	{
-
 		/// <summary>
 		/// The windows model implies only one managed activity.
 		/// </summary>
@@ -64,6 +65,7 @@ namespace Windows.UI.Xaml
 		public override void OnAttachedToWindow()
 		{
 			base.OnAttachedToWindow();
+
 			// Cannot call this in ctor: see
 			// https://stackoverflow.com/questions/10593022/monodroid-error-when-calling-constructor-of-custom-view-twodscrollview#10603714
 			RaiseConfigurationChanges();
@@ -72,7 +74,7 @@ namespace Windows.UI.Xaml
 
 		private void OnSensorOrientationChanged(SimpleOrientationSensor sender, SimpleOrientationSensorOrientationChangedEventArgs args)
 		{
-			RaiseConfigurationChanges();
+			_ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, RaiseConfigurationChanges);
 		}
 
 		private void OnInputPaneVisibilityChanged(InputPane sender, InputPaneVisibilityEventArgs args)
@@ -99,41 +101,65 @@ namespace Windows.UI.Xaml
 		public override bool DispatchKeyEvent(KeyEvent e)
 		{
 			var handled = false;
-			if (Uno.WinRTFeatureConfiguration.Focus.EnableExperimentalKeyboardFocus)
+
+			var virtualKey = VirtualKeyHelper.FromKeyCode(e.KeyCode);
+			var modifiers = VirtualKeyHelper.FromModifiers(e.Modifiers);
+
+			if (this.Log().IsEnabled(LogLevel.Trace))
 			{
-				var focusHandler = Uno.UI.Xaml.Core.CoreServices.Instance.MainRootVisual.AssociatedVisualTree.UnoFocusInputHandler;
-				if (focusHandler != null && e.Action == KeyEventActions.Down)
+				this.Log().Trace($"DispatchKeyEvent: {e.KeyCode} -> {virtualKey}");
+			}
+
+			try
+			{
+				if (FocusManager.GetFocusedElement() is not FrameworkElement element)
 				{
-					if (e.KeyCode == Keycode.Tab)
-					{
-						var shift = e.Modifiers.HasFlag(MetaKeyStates.ShiftLeftOn) || e.Modifiers.HasFlag(MetaKeyStates.ShiftRightOn) || e.Modifiers.HasFlag(MetaKeyStates.ShiftOn);
-						handled = focusHandler.TryHandleTabFocus(shift);
-					}
-					else if (
-						e.KeyCode == Keycode.DpadUp ||
-						e.KeyCode == Keycode.SystemNavigationUp)
-					{
-						handled = focusHandler.TryHandleDirectionalFocus(VirtualKey.Up);
-					}
-					else if (
-						e.KeyCode == Keycode.DpadDown ||
-						e.KeyCode == Keycode.SystemNavigationDown)
-					{
-						handled = focusHandler.TryHandleDirectionalFocus(VirtualKey.Down);
-					}
-					else if (
-						e.KeyCode == Keycode.DpadRight ||
-						e.KeyCode == Keycode.SystemNavigationRight)
-					{
-						handled = focusHandler.TryHandleDirectionalFocus(VirtualKey.Right);
-					}
-					else if (
-						e.KeyCode == Keycode.DpadLeft ||
-						e.KeyCode == Keycode.SystemNavigationLeft)
-					{
-						handled = focusHandler.TryHandleDirectionalFocus(VirtualKey.Left);
-					}
+					element = WinUICoreServices.Instance.MainRootVisual;
 				}
+
+				var routedArgs = new KeyRoutedEventArgs(this, virtualKey, modifiers)
+				{
+					CanBubbleNatively = false,
+				};
+
+				RoutedEvent routedEvent = e.Action == KeyEventActions.Down ?
+					UIElement.KeyDownEvent :
+					UIElement.KeyUpEvent;
+
+				element?.RaiseEvent(routedEvent, routedArgs);
+
+				handled = routedArgs.Handled;
+
+				if (CoreWindow.GetForCurrentThread() is ICoreWindowEvents ownerEvents)
+				{
+					var coreWindowArgs = new KeyEventArgs(
+						"keyboard",
+						virtualKey,
+						modifiers,
+						new CorePhysicalKeyStatus
+						{
+							ScanCode = (uint)e.KeyCode,
+							RepeatCount = 1,
+						})
+					{
+						Handled = handled
+					};
+
+					if (e.Action == KeyEventActions.Down)
+					{
+						ownerEvents.RaiseKeyDown(coreWindowArgs);
+					}
+					else if (e.Action == KeyEventActions.Up)
+					{
+						ownerEvents.RaiseKeyUp(coreWindowArgs);
+					}
+
+					handled = coreWindowArgs.Handled;
+				}
+			}
+			catch (Exception ex)
+			{
+				Windows.UI.Xaml.Application.Current.RaiseRecoverableUnhandledException(ex);
 			}
 
 			if (Gamepad.TryHandleKeyEvent(e))
@@ -201,6 +227,7 @@ namespace Windows.UI.Xaml
 			}
 
 			base.OnCreate(bundle);
+			Windows.UI.Xaml.Window.Current.OnActivityCreated();
 
 			LayoutProvider = new LayoutProvider(this);
 			LayoutProvider.KeyboardChanged += OnKeyboardChanged;
@@ -211,12 +238,7 @@ namespace Windows.UI.Xaml
 
 		private void OnInsetsChanged(Thickness insets)
 		{
-			if (Xaml.Window.Current != null)
-			{
-				//Set insets before raising the size changed event
-				Xaml.Window.Current.Insets = insets;
-				Xaml.Window.Current.RaiseNativeSizeChanged();
-			}
+			Xaml.Window.Current?.RaiseNativeSizeChanged();
 		}
 
 		public override void SetContentView(View view)
@@ -257,7 +279,8 @@ namespace Windows.UI.Xaml
 		{
 			base.OnPause();
 
-			VisualTreeHelper.CloseAllPopups();
+			// TODO Uno: When we support multi-window, this should close popups for the appropriate XamlRoot #8341.
+			VisualTreeHelper.CloseLightDismissPopups(WinUICoreServices.Instance.ContentRootCoordinator.CoreWindowContentRoot.XamlRoot);
 
 			DismissKeyboard();
 		}
@@ -267,6 +290,8 @@ namespace Windows.UI.Xaml
 			base.OnDestroy();
 
 			LayoutProvider.Stop();
+			LayoutProvider.KeyboardChanged -= OnKeyboardChanged;
+			LayoutProvider.InsetsChanged -= OnInsetsChanged;
 		}
 
 		public override void OnConfigurationChanged(Configuration newConfig)
@@ -281,7 +306,7 @@ namespace Windows.UI.Xaml
 			Xaml.Window.Current?.RaiseNativeSizeChanged();
 			ViewHelper.RefreshFontScale();
 			DisplayInformation.GetForCurrentView().HandleConfigurationChange();
-			Windows.UI.Xaml.Application.Current.OnSystemThemeChanged();
+			SystemThemeHelper.RefreshSystemTheme();
 		}
 
 #pragma warning disable CS0618 // deprecated members
@@ -352,9 +377,6 @@ namespace Windows.UI.Xaml
 		/// </summary>
 		/// <param name="type">A type full name</param>
 		/// <returns>The assembly that contains the specified type</returns>
-#if !NET6_0_OR_GREATER
-		[Android.Runtime.Preserve]
-#endif
 		[Java.Interop.Export]
 		[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
 		public static string GetTypeAssemblyFullName(string type) => Type.GetType(type)?.Assembly.FullName;

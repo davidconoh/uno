@@ -3,6 +3,8 @@ using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Markup;
 using Windows.UI.Xaml.Media;
+using Uno.UI.RuntimeTests.Helpers;
+
 
 #if HAS_UNO
 using Uno.UI.Xaml;
@@ -11,10 +13,10 @@ using Uno.UI.Xaml;
 namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 {
 	[TestClass]
+	[RunsOnUIThread]
 	public class Given_ResourceDictionary
 	{
 		[TestMethod]
-		[RunsOnUIThread]
 		public void When_Key_Overwritten()
 		{
 			const string key = "TestKey";
@@ -28,9 +30,19 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 			Assert.AreEqual(newValue, resourceDictionary[key]);
 		}
 
+		[TestMethod]
+		public async void When_ResourceDictionary_DP()
+		{
+			var SUT = new When_ResourceDictionary_DP();
+			await UITestHelper.Load(SUT);
+			var resourceDictionary = MyClass.GetX(SUT.MyButton);
+			Assert.AreEqual(2, resourceDictionary.Count);
+			Assert.AreEqual(Colors.Yellow, (Color)resourceDictionary["PrimaryColor"]);
+			Assert.AreEqual(Colors.Red, (Color)resourceDictionary["SecondaryColor"]);
+		}
+
 #if HAS_UNO // uses uno specifics code
 		[TestMethod]
-		[RunsOnUIThread]
 		public void When_LinkedResDict_ThemeUpdated()
 		{
 			const string TestBrush = nameof(TestBrush);
@@ -58,7 +70,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml
 					[TestBrush] = new WeakResourceInitializer(dontcare, that =>
 					{
 						var brush = new SolidColorBrush();
-						ResourceResolverSingleton.Instance.ApplyResource(brush, SolidColorBrush.ColorProperty, TestThemeColor, true, parserContext);
+						ResourceResolverSingleton.Instance.ApplyResource(brush, SolidColorBrush.ColorProperty, TestThemeColor, true, false, parserContext);
 
 						return brush;
 					})

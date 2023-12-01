@@ -5,10 +5,13 @@ using System.Threading;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Uno.UI.DataBinding;
 using Uno.UI.Xaml;
+using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Data;
+using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Shapes;
 
 namespace Uno.UI.Tests.BinderTests
@@ -624,7 +627,7 @@ namespace Uno.UI.Tests.BinderTests
 
 			Action callback = null;
 
-			object Coerce(object dependencyObject, object baseValue)
+			object Coerce(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 			{
 				callback?.Invoke();
 
@@ -925,45 +928,45 @@ namespace Uno.UI.Tests.BinderTests
 
 		#region CoerceValueCallbacks
 
-		private object PreventSet(object dependencyObject, object baseValue)
+		private object PreventSet(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			return DependencyProperty.UnsetValue;
 		}
 
-		private object DoNothing(object dependencyObject, object baseValue)
+		private object DoNothing(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			return baseValue;
 		}
 
-		private object ReturnNull(object dependencyObject, object baseValue)
+		private object ReturnNull(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			return null;
 		}
 
-		private object AbsoluteInteger(object dependencyObject, object baseValue)
+		private object AbsoluteInteger(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			return Math.Abs((int)baseValue);
 		}
 
-		private object IgnoreNegative(object dependencyObject, object baseValue)
+		private object IgnoreNegative(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			return (int)baseValue < 0
 				? DependencyProperty.UnsetValue
 				: baseValue;
 		}
 
-		private object StringTake10(object dependencyObject, object baseValue)
+		private object StringTake10(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			return new string(((string)baseValue).Take(10).ToArray());
 		}
 
-		private object Now(object dependencyObject, object baseValue)
+		private object Now(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			return DateTime.Now;
 		}
 
 		private static object _customCoercion;
-		private object Custom(object dependencyObject, object baseValue)
+		private object Custom(object dependencyObject, object baseValue, DependencyPropertyValuePrecedences _)
 		{
 			if (_customCoercion != null)
 			{
@@ -1374,6 +1377,109 @@ namespace Uno.UI.Tests.BinderTests
 			Assert.AreEqual(1, SUT.GetValue(property1));
 			Assert.AreEqual(2, SUT.GetValue(property2));
 			Assert.AreEqual(3, SUT.GetValue(property3));
+		}
+
+		[TestMethod]
+		public void When_AddCallback_OnPropertyChanged()
+		{
+			var brush = new SolidColorBrush();
+			IDisposable disposable = null;
+			IDisposable disposable2 = null;
+			disposable = brush.RegisterDisposablePropertyChangedCallback(OnBrushChanged);
+
+			void OnBrushChanged(ManagedWeakReference instance, DependencyProperty property, DependencyPropertyChangedEventArgs args)
+			{
+				disposable2 = brush.RegisterDisposablePropertyChangedCallback(OnInnerAddCallbackBrushChanged);
+			}
+
+			brush.Color = Colors.Red;
+
+			disposable?.Dispose();
+			disposable2?.Dispose();
+		}
+
+		private void OnInnerAddCallbackBrushChanged(ManagedWeakReference instance, DependencyProperty property, DependencyPropertyChangedEventArgs args)
+		{
+			Assert.Fail();
+		}
+
+		[TestMethod]
+		public void When_RemoveCallback_OnPropertyChanged()
+		{
+			var brush = new SolidColorBrush();
+			IDisposable disposable = null;
+			IDisposable disposable2 = null;
+			disposable = brush.RegisterDisposablePropertyChangedCallback(OnBrushChanged);
+			disposable2 = brush.RegisterDisposablePropertyChangedCallback(OnInnerRemoveCallbackBrushChanged);
+
+			void OnBrushChanged(ManagedWeakReference instance, DependencyProperty property, DependencyPropertyChangedEventArgs args)
+			{
+				disposable2.Dispose();
+			}
+
+			Action act = () => brush.Color = Colors.Red;
+			act.Should().NotThrow();
+
+			disposable?.Dispose();
+			disposable2?.Dispose();
+		}
+
+		private void OnInnerRemoveCallbackBrushChanged(ManagedWeakReference instance, DependencyProperty property, DependencyPropertyChangedEventArgs args)
+		{
+		}
+
+		[TestMethod]
+		public void When_AddParentChanged_OnParentChanged()
+		{
+			var firstParent = new Windows.UI.Xaml.Controls.Border();
+			var secondParent = new Windows.UI.Xaml.Controls.Border();
+			var border = new Windows.UI.Xaml.Controls.Border();
+			firstParent.Child = border;
+
+			IDisposable disposable = null;
+			IDisposable disposable2 = null;
+			disposable = border.RegisterParentChangedCallback(1, OnParentChangedCallback);
+			void OnParentChangedCallback(object instance, object key, DependencyObjectParentChangedEventArgs args)
+			{
+				disposable2 = border.RegisterParentChangedCallback(2, OnInnerAddParentChangedCallback);
+			}
+
+			firstParent.Child = null;
+
+			disposable?.Dispose();
+			disposable2?.Dispose();
+		}
+
+		private void OnInnerAddParentChangedCallback(object instance, object key, DependencyObjectParentChangedEventArgs args)
+		{
+			Assert.Fail();
+		}
+
+		[TestMethod]
+		public void When_RemoveParentChanged_OnParentChanged()
+		{
+			var firstParent = new Windows.UI.Xaml.Controls.Border();
+			var secondParent = new Windows.UI.Xaml.Controls.Border();
+			var border = new Windows.UI.Xaml.Controls.Border();
+			firstParent.Child = border;
+			IDisposable disposable = null;
+			IDisposable disposable2 = null;
+			disposable = border.RegisterParentChangedCallback(1, OnParentChangedCallback);
+			disposable2 = border.RegisterParentChangedCallback(2, OnInnerAddParentChangedCallback);
+			void OnParentChangedCallback(object instance, object key, DependencyObjectParentChangedEventArgs args)
+			{
+				disposable2.Dispose();
+			}
+
+			Action act = () => firstParent.Child = null;
+			act.Should().NotThrow();
+
+			disposable?.Dispose();
+			disposable2?.Dispose();
+		}
+
+		private void OnInnerRemoveParentChangedCallback(object instance, object key, DependencyObjectParentChangedEventArgs args)
+		{
 		}
 
 		[TestMethod]
@@ -1923,8 +2029,7 @@ namespace Uno.UI.Tests.BinderTests
 				new PropertyMetadata(
 					"default1",
 					(s, e) => { (s as MyDependencyObject1).PropertyChangedCallbacks.Add("changed1: " + e.NewValue); },
-					(s, baseValue) => { (s as MyDependencyObject1).CoerceValueCallbackCount++; return "coercion1: " + baseValue; }
-
+					(s, baseValue, _) => { (s as MyDependencyObject1).CoerceValueCallbackCount++; return "coercion1: " + baseValue; }
 				)
 			);
 
@@ -1940,7 +2045,7 @@ namespace Uno.UI.Tests.BinderTests
 				"default2",
 				FrameworkPropertyMetadataOptions.Inherits,
 				(s, e) => { (s as MyDependencyObject1).PropertyChangedCallbacks.Add("changed2: " + e.NewValue); },
-				(s, baseValue) => { (s as MyDependencyObject1).CoerceValueCallbackCount++; return "coercion2: " + baseValue; }
+				(s, baseValue, _) => { (s as MyDependencyObject1).CoerceValueCallbackCount++; return "coercion2: " + baseValue; }
 			);
 
 			MyPropertyProperty.OverrideMetadata(typeof(MyDependencyObject2), metadata);
@@ -1956,7 +2061,7 @@ namespace Uno.UI.Tests.BinderTests
 			var metadata = new FrameworkPropertyMetadata(
 				"default3",
 				(s, e) => { (s as MyDependencyObject1).PropertyChangedCallbacks.Add("changed3: " + e.NewValue); },
-				(s, baseValue) => { (s as MyDependencyObject1).CoerceValueCallbackCount++; return "coercion3: " + baseValue; }
+				(s, baseValue, _) => { (s as MyDependencyObject1).CoerceValueCallbackCount++; return "coercion3: " + baseValue; }
 			);
 
 			MyPropertyProperty.OverrideMetadata(typeof(MyDependencyObject3), metadata);

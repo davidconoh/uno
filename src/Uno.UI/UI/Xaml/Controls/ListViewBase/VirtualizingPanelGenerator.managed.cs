@@ -1,6 +1,6 @@
 ﻿#nullable enable
 
-#if !NET461
+#if !IS_UNIT_TESTS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -197,6 +197,11 @@ namespace Windows.UI.Xaml.Controls
 					if (clearContainer)
 					{
 						ItemsControl?.CleanUpContainer(container);
+					}
+					else
+					{
+						// https://github.com/unoplatform/uno/issues/11957
+						container.PrepareForRecycle();
 					}
 				}
 				else

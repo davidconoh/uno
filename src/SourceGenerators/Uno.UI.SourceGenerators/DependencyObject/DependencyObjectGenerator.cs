@@ -9,10 +9,6 @@ using Uno.Roslyn;
 using Uno.UI.SourceGenerators.Helpers;
 using Uno.UI.SourceGenerators.XamlGenerator;
 
-#if NETFRAMEWORK
-using Uno.SourceGeneration;
-#endif
-
 namespace Uno.UI.SourceGenerators.DependencyObject
 {
 	[Generator]
@@ -35,6 +31,8 @@ namespace Uno.UI.SourceGenerators.DependencyObject
 
 		private class SerializationMethodsGenerator : SymbolVisitor
 		{
+			private static readonly char[] _commaArray = new[] { ',' };
+
 			private readonly GeneratorExecutionContext _context;
 			private readonly INamedTypeSymbol? _dependencyObjectSymbol;
 			private readonly INamedTypeSymbol? _unoViewgroupSymbol;
@@ -68,7 +66,7 @@ namespace Uno.UI.SourceGenerators.DependencyObject
 				_iFrameworkElementSymbol = comp.GetTypeByMetadataName(XamlConstants.Types.IFrameworkElement);
 				_frameworkElementSymbol = comp.GetTypeByMetadataName("Windows.UI.Xaml.FrameworkElement");
 				_isUnoSolution = _context.GetMSBuildPropertyValue("_IsUnoUISolution") == "true";
-				_analyzerSuppressions = context.GetMSBuildPropertyValue("XamlGeneratorAnalyzerSuppressionsProperty").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+				_analyzerSuppressions = context.GetMSBuildPropertyValue("XamlGeneratorAnalyzerSuppressionsProperty").Split(_commaArray, StringSplitOptions.RemoveEmptyEntries);
 			}
 
 			public override void VisitNamedType(INamedTypeSymbol type)
@@ -311,11 +309,6 @@ private void SyncBinder(AppKit.NSView superview, AppKit.NSWindow window)
 
 				if (isAndroidView || isAndroidActivity || isAndroidFragment)
 				{
-					if (!isAndroidActivity && !isAndroidFragment)
-					{
-						WriteRegisterLoadActions(typeSymbol, builder);
-					}
-
 					builder.AppendMultiLineIndented($@"
 #if {hasOverridesAttachedToWindowAndroid} //Is Android view (that doesn't already override OnAttachedToWindow)
 
@@ -325,15 +318,11 @@ private void SyncBinder(AppKit.NSView superview, AppKit.NSWindow window)
 
 					protected override void OnNativeLoaded()
 					{{
-						_loadActions.ForEach(a => a.Item1());
-
 						BinderAttachedToWindow();
 					}}
 
 					protected override void OnNativeUnloaded()
 					{{
-						_loadActions.ForEach(a => a.Item2());
-
 						BinderDetachedFromWindow();
 					}}
 #else //Not UnoViewGroup
@@ -345,7 +334,6 @@ private void SyncBinder(AppKit.NSView superview, AppKit.NSWindow window)
 						OnLoading();
 						OnLoaded();
 #endif
-						_loadActions.ForEach(a => a.Item1());
 						BinderAttachedToWindow();
 					}}
 
@@ -353,7 +341,6 @@ private void SyncBinder(AppKit.NSView superview, AppKit.NSWindow window)
 					protected override void OnDetachedFromWindow()
 					{{
 						base.OnDetachedFromWindow();
-						_loadActions.ForEach(a => a.Item2());
 #if {implementsIFrameworkElement} //Is IFrameworkElement
 						OnUnloaded();
 #endif
@@ -391,41 +378,6 @@ private void SyncBinder(AppKit.NSView superview, AppKit.NSWindow window)
 				}
 			}
 
-			private static void WriteRegisterLoadActions(INamedTypeSymbol typeSymbol, IndentedStringBuilder builder)
-			{
-				builder.AppendMultiLineIndented($@"
-					// A list of actions to be executed on Load and Unload
-					private List<(Action loaded, Action unloaded)> _loadActions = new List<(Action loaded, Action unloaded)>(2);
-
-					/// <summary>
-					/// Registers actions to be executed when the control is Loaded and Unloaded.
-					/// </summary>
-					/// <param name=""loaded""></param>
-					/// <param name=""unloaded""></param>
-					/// <returns></returns>
-					/// <remarks>The loaded action may be executed immediately if the control is already loaded.</remarks>
-					public IDisposable RegisterLoadActions(Action loaded, Action unloaded)
-					{{
-						var actions = (loaded, unloaded);
-
-						_loadActions.Add(actions);
-
-#if __ANDROID__
-						if(this.IsLoaded())
-#elif __IOS__ || __MACOS__
-						if(Window != null)
-#else
-#error Unsupported platform
-#endif
-						{{
-							loaded();
-						}}
-
-						return Disposable.Create(() => _loadActions.Remove(actions));
-					}}
-				");
-			}
-
 			private void WriteAttachToWindow(INamedTypeSymbol typeSymbol, IndentedStringBuilder builder)
 			{
 				var hasOverridesAttachedToWindowiOS = typeSymbol.Is(_iosViewSymbol) &&
@@ -435,8 +387,6 @@ private void SyncBinder(AppKit.NSView superview, AppKit.NSWindow window)
 
 				if (hasOverridesAttachedToWindowiOS)
 				{
-					WriteRegisterLoadActions(typeSymbol, builder);
-
 					builder.AppendMultiLineIndented($@"
 public override void MovedToWindow()
 {{
@@ -444,12 +394,10 @@ public override void MovedToWindow()
 
 	if(Window != null)
 	{{
-		_loadActions.ForEach(a => a.loaded());
 		OnAttachedToWindowPartial();
 	}}
 	else
 	{{
-		_loadActions.ForEach(a => a.unloaded());
 		OnDetachedFromWindowPartial();
 	}}
 }}
@@ -481,8 +429,6 @@ partial void OnDetachedFromWindowPartial();
 
 				if (hasOverridesAttachedToWindowiOS)
 				{
-					WriteRegisterLoadActions(typeSymbol, builder);
-
 					builder.AppendMultiLineIndented($@"
 public override void ViewDidMoveToWindow()
 {{
@@ -490,12 +436,10 @@ public override void ViewDidMoveToWindow()
 
 	if(Window != null)
 	{{
-		_loadActions.ForEach(a => a.loaded());
 		OnAttachedToWindowPartial();
 	}}
 	else
 	{{
-		_loadActions.ForEach(a => a.unloaded());
 		OnDetachedFromWindowPartial();
 	}}
 }}
@@ -594,15 +538,6 @@ public void RestoreBindings()
 	__Store.RestoreBindings();
 }}
 
-/// <summary>
-/// Obsolete method kept for binary compatibility
-/// </summary>
-[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-public void ApplyCompiledBindings()
-{{
-}}
-
 private global::Uno.UI.DataBinding.ManagedWeakReference _selfWeakReference;
 global::Uno.UI.DataBinding.ManagedWeakReference IWeakReferenceProvider.WeakReference
 {{
@@ -679,8 +614,8 @@ global::Uno.UI.DataBinding.ManagedWeakReference IWeakReferenceProvider.WeakRefer
 						{{
 							GC.ReRegisterForFinalize(this);
 
-#if !(NET6_0_OR_GREATER && __MACOS__)
-							// net6.0-macos uses CoreCLR (not mono) and the notification mechanism is different
+#if __MACOS__
+							// net7.0-macos and later uses CoreCLR (not mono) and the notification mechanism is different
 							// workaround for mono's https://github.com/xamarin/xamarin-macios/issues/15089
 							NSObjectMemoryRepresentation.RemoveInFinalizerQueueFlag(this);
 #endif

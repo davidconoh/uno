@@ -1,4 +1,3 @@
-#if __ANDROID__
 #nullable enable
 using System;
 using Android.App;
@@ -65,8 +64,7 @@ namespace Windows.Graphics.Display
 		public uint ScreenWidthInRawPixels
 			=> (uint)_cachedDisplayMetrics.WidthPixels;
 
-		public double RawPixelsPerViewPixel
-			=> 1.0f * (int)_cachedDisplayMetrics.DensityDpi / (int)DisplayMetricsDensity.Default;
+		public double RawPixelsPerViewPixel => _cachedDisplayMetrics.Density;
 
 		public float LogicalDpi
 			// DisplayMetrics of 1.0 matches 100%, or UWP's default 96.0 DPI.
@@ -214,7 +212,7 @@ namespace Windows.Graphics.Display
 		{
 			if (ContextHelper.Current.GetSystemService(Context.WindowService) is { } windowService)
 			{
-				return windowService.JavaCast<IWindowManager>(); ;
+				return windowService.JavaCast<IWindowManager>();
 			}
 
 			throw new InvalidOperationException("Failed to get the system Window Service");
@@ -281,7 +279,7 @@ namespace Windows.Graphics.Display
 				{
 					Xdpi = configuration.DensityDpi;
 					Ydpi = configuration.DensityDpi;
-					Density = configuration.DensityDpi / 160;
+					Density = configuration.DensityDpi / (float)DisplayMetricsDensity.Default;
 					ScaledDensity = Density;
 					DensityDpi = ConvertIntToDensityEnum(configuration.DensityDpi);
 				}
@@ -339,4 +337,3 @@ namespace Windows.Graphics.Display
 		}
 	}
 }
-#endif

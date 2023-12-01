@@ -1,11 +1,7 @@
-﻿<Project Sdk="MSBuild.Sdk.Extras" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>netstandard2.0</TargetFrameworks>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(MSBuildRuntimeType)'=='Core' or '$(IsRunningInsideVisualStudio)'=='true'">
-		<TargetFrameworks>$(TargetFrameworks);net7.0</TargetFrameworks>
+		<TargetFrameworks>$(NetReferencePreviousAndCurrent)</TargetFrameworks>
 	</PropertyGroup>
 
 	<Import Project="../../targetframework-override.props" />
@@ -22,12 +18,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Uno.SourceGenerationTasks" />
-	</ItemGroup>
-
-	<Import Project="..\..\Uno.CrossTargetting.props" />
-
-	<ItemGroup>
 		<ProjectReference Include="..\..\Uno.Foundation\Uno.Foundation.Reference.csproj" />
 		<ProjectReference Include="..\..\Uno.UI\Uno.UI.Reference.csproj" />
 	</ItemGroup>
@@ -36,9 +26,7 @@
 
 		<PropertyGroup>
 			<_OverrideTargetFramework>$(TargetFramework)</_OverrideTargetFramework>
-			<_baseNugetPath Condition="'$(USERPROFILE)'!=''">$(USERPROFILE)</_baseNugetPath>
-			<_baseNugetPath Condition="'$(HOME)'!=''">$(HOME)</_baseNugetPath>
-			<_TargetNugetFolder>$(_baseNugetPath)\.nuget\packages\Uno.UI.Svg\$(UnoNugetOverrideVersion)\lib\$(_OverrideTargetFramework)</_TargetNugetFolder>
+			<_TargetNugetFolder>$(NuGetPackageRoot)\Uno.UI.Svg\$(UnoNugetOverrideVersion)\lib\$(_OverrideTargetFramework)</_TargetNugetFolder>
 		</PropertyGroup>
 		<ItemGroup>
 			<_OutputFiles Include="$(TargetDir)**" />

@@ -6,6 +6,9 @@ using System.Linq;
 using System.Text;
 using Uno.Extensions;
 using Uno;
+using Uno.Roslyn;
+using Microsoft.CodeAnalysis.PooledObjects;
+using System.Diagnostics;
 
 namespace Microsoft.CodeAnalysis
 {
@@ -35,10 +38,6 @@ namespace Microsoft.CodeAnalysis
 				SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
 				SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
 				SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
-
-		private static bool IsRoslyn34OrEalier { get; }
-			= typeof(INamedTypeSymbol).Assembly.GetVersionNumber() <= new Version("3.4");
-
 
 		/// <summary>
 		/// Given an <see cref="INamedTypeSymbol"/>, add the symbol declaration (including parent classes/namespaces) to the given <see cref="IIndentedStringBuilder"/>.
@@ -193,44 +192,37 @@ namespace Microsoft.CodeAnalysis
 		public static IEnumerable<IMethodSymbol> GetMethodsWithName(this ITypeSymbol resolvedType, string name)
 			=> resolvedType.GetMembers(name).OfType<IMethodSymbol>();
 
-		public static IMethodSymbol? GetFirstMethodWithName(this ITypeSymbol resolvedType, string name)
+		// includeBaseTypes was added to fix a bug for a specific caller without affecting anything else.
+		// But, we should revise it and make sure whether other callers need it or not, and potentially remove it completely and default to true.
+		public static IMethodSymbol? GetFirstMethodWithName(this ITypeSymbol resolvedType, string name, bool includeBaseTypes = false)
 		{
-			var members = resolvedType.GetMembers(name);
-
-			for (int i = 0; i < members.Length; i++)
+			var baseType = resolvedType;
+			while (baseType is not null)
 			{
-				if (members[i] is IMethodSymbol method)
+				var members = baseType.GetMembers(name);
+
+				for (int i = 0; i < members.Length; i++)
 				{
-					return method;
+					if (members[i] is IMethodSymbol method)
+					{
+						return method;
+					}
 				}
+
+				if (!includeBaseTypes)
+				{
+					return null;
+				}
+
+				baseType = baseType.BaseType;
 			}
+
 
 			return null;
 		}
 
 		public static IEnumerable<IFieldSymbol> GetFields(this ITypeSymbol resolvedType)
 			=> resolvedType.GetMembers().OfType<IFieldSymbol>();
-
-		public static IEnumerable<IFieldSymbol> GetFieldsWithName(this ITypeSymbol resolvedType, string name)
-			=> resolvedType.GetMembers(name).OfType<IFieldSymbol>();
-
-		/// <summary>
-		/// Return fields of the current type and all of its ancestors
-		/// </summary>
-		/// <param name="symbol"></param>
-		/// <returns></returns>
-		public static IEnumerable<IFieldSymbol> GetAllFieldsWithName(this INamedTypeSymbol? symbol, string name)
-		{
-			while (symbol != null)
-			{
-				foreach (var property in symbol.GetMembers(name).OfType<IFieldSymbol>())
-				{
-					yield return property;
-				}
-
-				symbol = symbol?.BaseType;
-			}
-		}
 
 		public static AttributeData? FindAttribute(this ISymbol? property, INamedTypeSymbol? attributeClassSymbol)
 		{
@@ -240,6 +232,21 @@ namespace Microsoft.CodeAnalysis
 		public static AttributeData? FindAttributeFlattened(this ISymbol? property, INamedTypeSymbol? attributeClassSymbol)
 		{
 			return property?.GetAllAttributes().FirstOrDefault(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, attributeClassSymbol));
+		}
+
+		public static ITypeSymbol? TryGetPropertyOrFieldType(this ITypeSymbol type, string propertyOrFieldName)
+		{
+			if (type.GetAllMembersWithName(propertyOrFieldName).FirstOrDefault() is ISymbol member)
+			{
+				return member switch
+				{
+					IPropertySymbol propertySymbol => propertySymbol.Type,
+					IFieldSymbol fieldSymbol => fieldSymbol.Type,
+					_ => null,
+				};
+			}
+
+			return null;
 		}
 
 		public static IEnumerable<INamedTypeSymbol> GetAllInterfaces(this ITypeSymbol? symbol)
@@ -256,6 +263,59 @@ namespace Microsoft.CodeAnalysis
 					yield return @interface;
 				}
 			}
+		}
+
+		public static ISymbol? GetMemberInlcudingBaseTypes(this INamespaceOrTypeSymbol symbol, string memberName)
+		{
+			if (symbol is INamespaceSymbol)
+			{
+				return symbol.GetMembers(memberName).FirstOrDefault();
+			}
+
+			var typeSymbol = (ITypeSymbol?)symbol;
+			while (typeSymbol is not null)
+			{
+				if (typeSymbol.GetMembers(memberName).FirstOrDefault() is { } member)
+				{
+					return member;
+				}
+
+				typeSymbol = typeSymbol.BaseType;
+			}
+
+			return null;
+		}
+
+		public static ISymbol? GetMemberInlcudingBaseTypes<TArg>(this INamespaceOrTypeSymbol symbol, TArg arg, Func<ISymbol, TArg, bool> predicate)
+		{
+			if (symbol is INamespaceSymbol)
+			{
+				foreach (var candicate in symbol.GetMembers())
+				{
+					if (predicate(candicate, arg))
+					{
+						return candicate;
+					}
+				}
+
+				return null;
+			}
+
+			var typeSymbol = (ITypeSymbol?)symbol;
+			while (typeSymbol is not null)
+			{
+				foreach (var candidate in typeSymbol.GetMembers())
+				{
+					if (predicate(candidate, arg))
+					{
+						return candidate;
+					}
+				}
+
+				typeSymbol = typeSymbol.BaseType;
+			}
+
+			return null;
 		}
 
 		public static bool IsNullable(this ITypeSymbol type)
@@ -324,7 +384,7 @@ namespace Microsoft.CodeAnalysis
 			return BuildFrom(symbol, new StringBuilder(256)).Replace('`', '-').Replace('+', '.').ToString();
 		}
 
-		public static string? GetFullName(this INamespaceOrTypeSymbol? type)
+		private static string? GetFullName(this ITypeSymbol? type)
 		{
 			if (type is IArrayTypeSymbol arrayType)
 			{
@@ -336,10 +396,13 @@ namespace Microsoft.CodeAnalysis
 				return $"System.Nullable`1[{t.GetFullName()}]";
 			}
 
-			return type?.ToDisplayString();
+			return type?.GetFullyQualifiedTypeExcludingGlobal();
 		}
 
-		public static string GetFullMetadataName(this INamespaceOrTypeSymbol symbol)
+		// forRegisterAttributeDotReplacement is used specifically by NativeCtorsGenerator to generate for the Android/iOS RegisterAttribute
+		// A non-null value means we are generating for RegisterAttribute, and we replace invalid characters with '_'.
+		// The '.' is special cased to be replaced by the value of forRegisterAttributeDotReplacement, whether it's '_' or '/'
+		public static string GetFullMetadataName(this ITypeSymbol symbol, char? forRegisterAttributeDotReplacement = null)
 		{
 			ISymbol s = symbol;
 			var sb = new StringBuilder(s.MetadataName);
@@ -369,9 +432,19 @@ namespace Microsoft.CodeAnalysis
 
 			var namedType = symbol as INamedTypeSymbol;
 
-			if (namedType?.TypeArguments.Any() ?? false)
+			// When generating for RegisterAttribute, the name we pass to the attribute is used by Xamarin tooling for generating Java files, specifically, it's used for the class name.
+			// The characters '.', '+', and '`' are not valid characters for a class name.
+			// On Android, we use '/' as replacement for '.' to match Jni name:
+			// https://github.com/xamarin/java.interop/blob/38c8a827e78ffe9c80ad2313a9e0e0d4f8215184/src/Java.Interop.Tools.TypeNameMappings/Java.Interop.Tools.TypeNameMappings/JavaNativeTypeManager.cs#L693-L699
+			if (forRegisterAttributeDotReplacement.HasValue)
 			{
-				var genericArgs = namedType.TypeArguments.Select(GetFullMetadataName).JoinBy(",");
+				var replacement = forRegisterAttributeDotReplacement.Value;
+				sb.Replace('.', replacement).Replace('+', '_').Replace('`', '_');
+			}
+			else if (namedType?.TypeArguments.Any() ?? false)
+			{
+				// We don't append type arguments when generating for RegisterAttribute because '[' and ']' are invalid characters for a class name.
+				var genericArgs = namedType.TypeArguments.Select(a => GetFullMetadataName(a, null)).JoinBy(",");
 				sb.Append($"[{genericArgs}]");
 			}
 
@@ -420,43 +493,75 @@ namespace Microsoft.CodeAnalysis
 		}
 
 		/// <summary>
-		/// Return properties of the current type and all of its ancestors
+		/// Return property with specific name of the current type and all of its ancestors.
 		/// </summary>
-		/// <param name="symbol"></param>
-		/// <returns></returns>
-		public static IEnumerable<IPropertySymbol> GetAllPropertiesWithName(this INamedTypeSymbol? symbol, string name)
+		/// <param name="symbol">The type to look property in (lookup includes base types)</param>
+		/// <param name="name">The property name to lookup.</param>
+		/// <returns>The found property symbol or not if not found.</returns>
+		public static IPropertySymbol? GetPropertyWithName(this INamedTypeSymbol? symbol, string name)
 		{
 			while (symbol != null)
 			{
-				foreach (var property in symbol.GetMembers(name).OfType<IPropertySymbol>())
+				foreach (var property in symbol.GetMembers(name))
 				{
-					yield return property;
+					if (property.Kind == SymbolKind.Property)
+					{
+						return (IPropertySymbol)property;
+					}
 				}
 
 				symbol = symbol.BaseType;
 			}
+
+			return null;
 		}
 
 		/// <summary>
-		/// Builds a fully qualified type string, including generic types.
+		/// Return field with specific name of the current type and all of its ancestors.
 		/// </summary>
-		public static string GetFullyQualifiedType(this ITypeSymbol type)
+		/// <param name="symbol">The type to look field in (lookup includes base types)</param>
+		/// <param name="name">The field name to lookup.</param>
+		/// <returns>The found field symbol or not if not found.</returns>
+		public static IFieldSymbol? GetFieldWithName(this INamedTypeSymbol? symbol, string name)
 		{
-			if (IsRoslyn34OrEalier && type is INamedTypeSymbol namedTypeSymbol)
+			while (symbol != null)
 			{
-				if (namedTypeSymbol.IsGenericType && !namedTypeSymbol.IsNullable())
+				foreach (var field in symbol.GetMembers(name))
 				{
-					var typeName = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.ToDisplayString(type, format: new SymbolDisplayFormat(
-											globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
-											typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
-											genericsOptions: SymbolDisplayGenericsOptions.None,
-											miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers));
-
-					return typeName + "<" + string.Join(", ", namedTypeSymbol.TypeArguments.Select(GetFullyQualifiedType)) + ">";
+					if (field.Kind == SymbolKind.Field)
+					{
+						return (IFieldSymbol)field;
+					}
 				}
+
+				symbol = symbol.BaseType;
 			}
 
-			return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+			return null;
+		}
+
+		/// <summary>
+		/// Builds a fully qualified type string, including generic types and global:: prefix.
+		/// </summary>
+		public static string GetFullyQualifiedTypeIncludingGlobal(this ITypeSymbol type)
+		{
+			return type.GetFullyQualifiedType(includeGlobalNamespace: true);
+		}
+
+		/// <summary>
+		/// Builds a fully qualified type string, including generic types and global:: prefix.
+		/// </summary>
+		public static string GetFullyQualifiedTypeExcludingGlobal(this ITypeSymbol type)
+		{
+			return type.GetFullyQualifiedType(includeGlobalNamespace: false);
+		}
+
+		private static string GetFullyQualifiedType(this ITypeSymbol type, bool includeGlobalNamespace)
+		{
+			var pool = PooledStringBuilder.GetInstance();
+			var visitor = new UnoNamedTypeSymbolDisplayVisitor(pool.Builder, includeGlobalNamespace);
+			type.Accept(visitor);
+			return pool.ToStringAndFree();
 		}
 
 		public static TypedConstant? FindNamedArg(this AttributeData attribute, string argName)

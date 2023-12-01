@@ -1,9 +1,9 @@
-#if __WASM__
 using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.JavaScript;
 using System.Threading;
 using Uno;
 using Uno.Disposables;
@@ -11,6 +11,7 @@ using Uno.Extensions;
 using Uno.Foundation;
 using Uno.Foundation.Logging;
 using Uno.UI;
+using Uno.UI.Xaml;
 using Uno.UI.Xaml.Core;
 using Windows.Foundation;
 using Windows.Foundation.Metadata;
@@ -93,20 +94,11 @@ namespace Windows.UI.Xaml
 			}
 		}
 
+		[JSExport]
 		[Preserve]
-		public static void Resize(double width, double height)
-		{
-			var window = Current?._rootVisual;
-			if (window == null)
-			{
-				typeof(Window).Log().Error($"Resize ignore, no current window defined");
-				return; // nothing to measure
-			}
+		internal static void Resize(double width, double height) => Current.OnNativeSizeChanged(new Size(width, height));
 
-			Current.OnNativeSizeChanged(new Size(width, height));
-		}
-
-		private void OnNativeSizeChanged(Size size)
+		internal void OnNativeSizeChanged(Size size)
 		{
 			var newBounds = new Rect(0, 0, size.Width, size.Height);
 
@@ -130,10 +122,7 @@ namespace Windows.UI.Xaml
 			}
 		}
 
-		partial void InternalActivate()
-		{
-			WebAssemblyRuntime.InvokeJS("Uno.UI.WindowManager.current.activate();");
-		}
+		partial void ShowPartial() => WindowManagerInterop.WindowActivate();
 
 		private void InternalSetContent(UIElement content)
 		{
@@ -164,7 +153,8 @@ namespace Windows.UI.Xaml
 					UIElement.LoadingRootElement(_rootVisual);
 				}
 
-				WebAssemblyRuntime.InvokeJS($"Uno.UI.WindowManager.current.setRootElement({_rootVisual.HtmlId});");
+				WindowManagerInterop.SetRootElement(_rootVisual.HtmlId);
+				DispatchInvalidateMeasure();
 
 				if (FeatureConfiguration.FrameworkElement.WasmUseManagedLoadedUnloaded)
 				{
@@ -194,35 +184,20 @@ namespace Windows.UI.Xaml
 			}
 		}
 
-		internal IDisposable OpenPopup(Popup popup)
+		internal void DisplayFullscreen(UIElement content)
 		{
-			if (this.Log().IsEnabled(Uno.Foundation.Logging.LogLevel.Debug))
+			if (content == null)
 			{
-				this.Log().Debug($"Creating popup");
+				FullWindowMediaRoot.Child = null;
+				_rootBorder.Visibility = Visibility.Visible;
+				FullWindowMediaRoot.Visibility = Visibility.Collapsed;
 			}
-
-			if (PopupRoot == null)
+			else
 			{
-				throw new InvalidOperationException("PopupRoot is not initialized yet.");
+				FullWindowMediaRoot.Visibility = Visibility.Visible;
+				_rootBorder.Visibility = Visibility.Collapsed;
+				FullWindowMediaRoot.Child = content;
 			}
-
-			var popupPanel = popup.PopupPanel;
-			PopupRoot.Children.Add(popupPanel);
-
-			return new CompositeDisposable(
-				Disposable.Create(() =>
-				{
-
-					if (this.Log().IsEnabled(Uno.Foundation.Logging.LogLevel.Debug))
-					{
-						this.Log().Debug($"Closing popup");
-					}
-
-					PopupRoot.Children.Remove(popupPanel);
-				}),
-				VisualTreeHelper.RegisterOpenPopup(popup)
-			);
 		}
 	}
 }
-#endif

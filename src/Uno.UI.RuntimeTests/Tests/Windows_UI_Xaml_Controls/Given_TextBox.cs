@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Uno.UI.RuntimeTests.Helpers;
@@ -12,6 +11,7 @@ using Windows.UI;
 using FluentAssertions;
 using MUXControlsTestApp.Utilities;
 using System.Runtime.InteropServices;
+
 #if NETFX_CORE
 using Uno.UI.Extensions;
 #elif __IOS__
@@ -25,7 +25,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 {
 	[TestClass]
 	[RunsOnUIThread]
-	public class Given_TextBox
+	public partial class Given_TextBox
 	{
 #if __ANDROID__
 		[TestMethod]
@@ -140,7 +140,13 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			WindowHelper.WindowContent = textBox;
 			await WindowHelper.WaitForLoaded(textBox);
 			textBox.Focus(FocusState.Programmatic);
-			Assert.AreEqual(textBox.Text.Length, textBox.SelectionStart);
+			// On WinUI, TextBoxes start their selection at 0
+			Assert.AreEqual(
+#if __SKIA__
+				!FeatureConfiguration.TextBox.UseOverlayOnSkia ? 0 :
+#endif
+					textBox.Text.Length,
+				textBox.SelectionStart);
 			Assert.AreEqual(0, textBox.SelectionLength);
 			textBox.Select(1, 7);
 			Assert.AreEqual(1, textBox.SelectionStart);
@@ -161,7 +167,13 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			WindowHelper.WindowContent = textBox;
 			await WindowHelper.WaitForLoaded(textBox);
 			textBox.Focus(FocusState.Programmatic);
-			Assert.AreEqual(textBox.Text.Length, textBox.SelectionStart);
+			// On WinUI, TextBoxes start their selection at 0
+			Assert.AreEqual(
+#if __SKIA__
+				!FeatureConfiguration.TextBox.UseOverlayOnSkia ? 0 :
+#endif
+					textBox.Text.Length,
+				textBox.SelectionStart);
 			Assert.AreEqual(0, textBox.SelectionLength);
 			textBox.Select(1, 20);
 			Assert.AreEqual(1, textBox.SelectionStart);
@@ -182,7 +194,13 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			WindowHelper.WindowContent = textBox;
 			await WindowHelper.WaitForLoaded(textBox);
 			textBox.Focus(FocusState.Programmatic);
-			Assert.AreEqual(textBox.Text.Length, textBox.SelectionStart);
+			// On WinUI, TextBoxes start their selection at 0
+			Assert.AreEqual(
+#if __SKIA__
+				!FeatureConfiguration.TextBox.UseOverlayOnSkia ? 0 :
+#endif
+					textBox.Text.Length,
+				textBox.SelectionStart);
 			Assert.AreEqual(0, textBox.SelectionLength);
 			textBox.Select(20, 5);
 			Assert.AreEqual(10, textBox.SelectionStart);
@@ -402,6 +420,9 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			textBox.SelectedText = "1234";
 
 			Assert.AreEqual("1234ABCDEFGHIJKLMNOPQRSTUVWXYZ", textBox.Text);
+#if __SKIA__
+			Xaml.Core.VisualTree.GetFocusManagerForElement(textBox)!.FindAndSetNextFocus(FocusNavigationDirection.Next); // move focus to dismiss the overlay
+#endif
 		}
 
 		[TestMethod]
@@ -488,9 +509,16 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await WindowHelper.WaitForLoaded(textBox);
 
 			var contentControl = VisualTreeUtils.FindVisualChildByType<ContentControl>(textBox);
-			// This will no longer be true when we support non-native text box input - test will have to be updated for this option
-			Assert.IsInstanceOfType(contentControl.Content, typeof(TextBlock));
-			Assert.AreEqual(initialText, ((TextBlock)contentControl.Content).Text);
+			if (FeatureConfiguration.TextBox.UseOverlayOnSkia)
+			{
+				Assert.IsInstanceOfType(contentControl.Content, typeof(TextBlock));
+				Assert.AreEqual(initialText, ((TextBlock)contentControl.Content).Text);
+			}
+			else
+			{
+				Assert.IsInstanceOfType(contentControl.Content, typeof(Grid));
+				Assert.AreEqual(initialText, contentControl.FindFirstChild<TextBlock>().Text);
+			}
 		}
 #endif
 
@@ -552,6 +580,205 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			Assert.AreEqual(5, textChangedInvokeCount);
 			Assert.AreEqual(5, textChangingInvokeCount);
 			Assert.AreEqual(initialText + "5", textBox.Text);
+		}
+
+#if __ANDROID__
+		[TestMethod]
+		public async Task When_ReadOnly_TextBoxView()
+		{
+			var textBox = new TextBox
+			{
+				Text = "Text",
+				IsReadOnly = true
+			};
+
+			WindowHelper.WindowContent = textBox;
+			await WindowHelper.WaitForLoaded(textBox);
+
+			Assert.IsTrue(textBox.TextBoxView.Focusable);
+			Assert.IsTrue(textBox.TextBoxView.FocusableInTouchMode);
+			Assert.IsTrue(textBox.TextBoxView.Clickable);
+			Assert.IsTrue(textBox.TextBoxView.LongClickable);
+		}
+
+		[TestMethod]
+		public async Task When_NotTabStop_TextBoxView()
+		{
+			var textBox = new TextBox
+			{
+				Text = "Text",
+				IsTabStop = false
+			};
+
+			WindowHelper.WindowContent = textBox;
+			await WindowHelper.WaitForLoaded(textBox);
+
+			Assert.IsFalse(textBox.TextBoxView.Focusable);
+			Assert.IsFalse(textBox.TextBoxView.FocusableInTouchMode);
+			Assert.IsFalse(textBox.TextBoxView.Clickable);
+			Assert.IsFalse(textBox.TextBoxView.LongClickable);
+		}
+
+		[TestMethod]
+		public async Task When_ReadOnly_NotTabStop_TextBoxView()
+		{
+			var textBox = new TextBox
+			{
+				Text = "Text",
+				IsTabStop = false,
+				IsReadOnly = true
+			};
+
+			WindowHelper.WindowContent = textBox;
+			await WindowHelper.WaitForLoaded(textBox);
+
+			Assert.IsFalse(textBox.TextBoxView.Focusable);
+			Assert.IsFalse(textBox.TextBoxView.FocusableInTouchMode);
+			Assert.IsFalse(textBox.TextBoxView.Clickable);
+			Assert.IsFalse(textBox.TextBoxView.LongClickable);
+		}
+
+
+		[TestMethod]
+		public async Task When_ReadOnly_Update_Text_Native_View()
+		{
+			var textBox = new TextBox
+			{
+				Text = "Text",
+				IsReadOnly = true,
+				IsTabStop = false
+			};
+
+			WindowHelper.WindowContent = textBox;
+			await WindowHelper.WaitForLoaded(textBox);
+
+			textBox.Text = "Something";
+
+			Assert.AreEqual("Something", textBox.TextBoxView.Text);
+		}
+#endif
+
+		[TestMethod]
+		public async Task When_ReadOnly_Update_Text()
+		{
+			var textBox = new TextBox
+			{
+				Text = "Text",
+				IsReadOnly = true,
+				IsTabStop = false
+			};
+
+			WindowHelper.WindowContent = textBox;
+			await WindowHelper.WaitForLoaded(textBox);
+
+			textBox.Text = "Something";
+
+			Assert.AreEqual("Something", textBox.Text);
+		}
+
+		[TestMethod]
+#if __MACOS__
+		[Ignore("Currently fails on macOS, part of #9282 epic")]
+#endif
+		public async Task When_ReadOnly_Toggled_Repeatedly()
+		{
+			var textBox = new TextBox
+			{
+				Text = "Text",
+				IsReadOnly = true,
+			};
+
+			WindowHelper.WindowContent = textBox;
+			await WindowHelper.WaitForLoaded(textBox);
+			textBox.Focus(FocusState.Programmatic);
+
+			textBox.Text = "Something";
+
+			textBox.IsReadOnly = false;
+
+			var updatedText = "Something else";
+			textBox.Text = updatedText;
+
+			textBox.IsReadOnly = true;
+
+			textBox.SelectAll();
+
+			Assert.AreEqual(updatedText.Length, textBox.SelectionLength);
+		}
+
+#if __ANDROID__
+		[TestMethod]
+		public async Task When_TextBox_ImeAction_Enter()
+		{
+			var textBox = new TextBox
+			{
+				Text = "Text",
+			};
+
+			WindowHelper.WindowContent = textBox;
+			await WindowHelper.WaitForLoaded(textBox);
+
+			var act = () => textBox.OnEditorAction(textBox.TextBoxView, Android.Views.InputMethods.ImeAction.Next, null);
+			act.Should().NotThrow();
+		}
+#endif
+
+		[TestMethod]
+#if __SKIA__
+		[Ignore("Fails on Skia")]
+#endif
+		public async Task When_TextBox_Wrap_Custom_Style()
+		{
+			var page = new TextBox_Wrapping();
+			await UITestHelper.Load(page);
+
+			page.SUT.Text = "Short";
+			await WindowHelper.WaitForIdle();
+			var height1 = page.SUT.ActualHeight;
+
+			page.SUT.Text = "This is a very very very much longer text. This TextBox should now wrap and have a larger height.";
+			await WindowHelper.WaitForIdle();
+			var height2 = page.SUT.ActualHeight;
+
+			page.SUT.Text = "Short";
+			await WindowHelper.WaitForIdle();
+			var height3 = page.SUT.ActualHeight;
+
+			Assert.AreEqual(height1, height3);
+			height2.Should().BeGreaterThan(height1);
+		}
+
+		[TestMethod]
+#if __SKIA__ || __IOS__
+		[Ignore("Fails on Skia and iOS")]
+		// On iOS, the failure is: AssertFailedException: Expected value to be greater than 1199.0, but found 1199.0.
+		// Since the number is large, it looks like the TextBox is taking the full height.
+#endif
+		public async Task When_TextBox_Wrap_Fluent()
+		{
+			var SUT = new TextBox()
+			{
+				Width = 200,
+				TextWrapping = TextWrapping.Wrap,
+				AcceptsReturn = true,
+			};
+
+			await UITestHelper.Load(SUT);
+
+			SUT.Text = "Short";
+			await WindowHelper.WaitForIdle();
+			var height1 = SUT.ActualHeight;
+
+			SUT.Text = "This is a very very very much longer text. This TextBox should now wrap and have a larger height.";
+			await WindowHelper.WaitForIdle();
+			var height2 = SUT.ActualHeight;
+
+			SUT.Text = "Short";
+			await WindowHelper.WaitForIdle();
+			var height3 = SUT.ActualHeight;
+
+			Assert.AreEqual(height1, height3);
+			height2.Should().BeGreaterThan(height1);
 		}
 	}
 }

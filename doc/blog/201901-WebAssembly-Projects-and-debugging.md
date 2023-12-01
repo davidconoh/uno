@@ -1,10 +1,14 @@
+---
+uid: Uno.Blog.WebAssemblyProjectsAndDebugging
+---
+
 # Introducing Uno Platform WebAssembly Projects and C# Debugging
 
 The progress on the Uno Platform support for WebAssembly has been steady, along with the mono runtime making large improvements in the support for a debugging experience.
 
 We've added support for a better Visual Studio project integration as well as an experimental debugging experience.
 
-The next release of the [Uno Visual Studio add-in](https://marketplace.visualstudio.com/items?itemName=nventivecorp.uno-platform-addin) will contain the new project format and the debugger, but you can try it today using the [latest experimental release](https://github.com/unoplatform/uno/releases) of the Uno Platform.
+The next release of the [Uno Visual Studio add-in](https://marketplace.visualstudio.com/items?itemName=unoplatform.uno-platform-addin-2022) will contain the new project format and the debugger, but you can try it today using the [latest experimental release](https://github.com/unoplatform/uno/releases) of the Uno Platform.
 
 ## WebAssembly Project Support for Visual Studio
 Originally, the support for WebAssembly was done with Uno through the creation of a .NET Standard 2.0 project, relying on the use of mono-provided python server. The sole purpose of this server is to serve files with the `application/wasm` mime type, which can be done through a normal WebApp project.
@@ -40,7 +44,7 @@ There is only one important constraint: the debugging only works with Chrome. It
 The debugger provides access to all local sources, as well as [Source Link enabled assemblies](https://docs.microsoft.com/en-us/dotnet/standard/library-guidance/sourcelink) when available, provide single stepping, breakpoints, stack trace walking, local variables and watches. Currently, watching local variables is limited to primitives and strings.
 
 To give you an example of the debugging experience, this is a step-into the `DateTime.Now` property in the mono source tree, from a normal user program:
- ![](Assets/201901-debugger-step-04.png)
+ ![Debugger - Step-into the `DateTime.Now` property in the mono source tree, from a normal user program](Assets/201901-debugger-step-04.png)
 
 The Mono team recently added the ability to get the source files from debugging information for the Mono binaries, making it quite easy for debuggers to pull exact source files for published binaries.
 
@@ -58,17 +62,17 @@ The Mono team recently added the ability to get the source files from debugging 
 - Once your application is loaded, press **Alt+Shift+D**, a new tab will open
 - You will get an error message telling you that Chrome has not been opened
 
-![](Assets/201901-debugger-step-01.png)
+![Debugger - Error message telling you that Chrome has not been opened](Assets/201901-debugger-step-01.png)
 -  Close all your chrome instances and run Chrome again using the provided command line
 -  Once again, once your application is loaded, press **Alt+Shift+D**, a new tab will open.
 - You will now get the Chrome DevTools to open listing all the .NET loaded assemblies on the Sources tab: 
 
-![](Assets/201901-debugger-step-02.png)
+![Debugger - Chrome DevTools listing all the .NET loaded assemblies on the Sources tab](Assets/201901-debugger-step-02.png)
 
 - You can now set break points in the available source files
 - Since the app's initialization has already started, you can refresh the original website tab, or use the smaller refresh button in the preview section of the Chrome DevTools:
 
-![](Assets/201901-debugger-step-03.png)
+![Debugger - The smaller refresh button location in the preview section of the Chrome DevTools](Assets/201901-debugger-step-03.png)
 
 ## How does it work?
 

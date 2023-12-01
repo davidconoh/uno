@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Threading.Tasks;
+using System.IO;
 using Uno.UI.Samples.Controls;
 using Windows.Media.Capture;
 using Windows.UI.Xaml;
@@ -16,7 +18,7 @@ public sealed partial class CameraCaptureUISample : Page
 	}
 
 #if __ANDROID__ || __IOS__
-	private async void CaptureButton_Click(object sender, RoutedEventArgs e)
+	private async void CaptureImage_Click(object sender, RoutedEventArgs e)
 	{
 		try
 		{
@@ -39,6 +41,22 @@ public sealed partial class CameraCaptureUISample : Page
 		catch (Exception ex)
 		{
 			System.Diagnostics.Debug.WriteLine(ex);
+		}
+	}
+
+	private async void CaptureVideo_Click(object sender, RoutedEventArgs e)
+	{
+		var captureUI = new CameraCaptureUI();
+
+		var result = await captureUI.CaptureFileAsync(CameraCaptureUIMode.Video);
+
+		if (result != null)
+		{
+			videoSize.Text = $"Captured file: {result.Path}, Size: {new FileInfo(result?.Path!).Length}";
+		}
+		else
+		{
+			videoSize.Text = "Nothing was selected";
 		}
 	}
 #endif

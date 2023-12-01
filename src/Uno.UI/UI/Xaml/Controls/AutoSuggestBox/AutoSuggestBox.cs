@@ -12,6 +12,7 @@ using Windows.UI.ViewManagement;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using WinUICoreServices = Uno.UI.Xaml.Core.CoreServices;
 
 #if __IOS__
 using UIKit;
@@ -62,6 +63,13 @@ namespace Windows.UI.Xaml.Controls
 			_popup.DisableFocus();
 #endif
 
+#if __IOS__
+			if (_textBox is { } textbox)
+			{
+				textbox.IsKeepingFocusOnEndEditing = true;
+			}
+#endif
+
 			UpdateQueryButton();
 			UpdateTextBox();
 			UpdateDescriptionVisibility(true);
@@ -93,13 +101,9 @@ namespace Windows.UI.Xaml.Controls
 
 		protected override void OnItemsSourceChanged(DependencyPropertyChangedEventArgs e)
 		{
-			// Calling this method before base.OnItemsSourceChanged() ensures that, in the case of an ObservableCollection, the list
-			// subscribes to CollectionChanged before AutoSuggestBox does. This is important for Android because the list needs to
-			// notify RecyclerView of collection changes before UpdateSuggestionList() measures it, otherwise we get errors like
-			// "Inconsistency detected. Invalid view holder adapter position"
-			UpdateSuggestionList();
-
 			base.OnItemsSourceChanged(e);
+
+			UpdateSuggestionList();
 		}
 
 		internal override void OnItemsSourceSingleCollectionChanged(object sender, NotifyCollectionChangedEventArgs args, int section)
@@ -107,6 +111,11 @@ namespace Windows.UI.Xaml.Controls
 			base.OnItemsSourceSingleCollectionChanged(sender, args, section);
 
 			UpdateSuggestionList();
+		}
+
+		protected override DependencyObject GetContainerForItemOverride()
+		{
+			return new ListViewItem() { IsGeneratedContainer = true };
 		}
 
 		internal override void OnItemsSourceGroupsChanged(object sender, NotifyCollectionChangedEventArgs args)
@@ -169,7 +178,16 @@ namespace Windows.UI.Xaml.Controls
 				popupChild.MinWidth = _layoutRoot.ActualWidth;
 				popupChild.MaxHeight = MaxSuggestionListHeight;
 
-				var windowRect = ApplicationView.GetForCurrentView().VisibleBounds;
+				Rect windowRect;
+				if (WinUICoreServices.Instance.InitializationType == Uno.UI.Xaml.Core.InitializationType.IslandsOnly)
+				{
+					windowRect = XamlRoot.Bounds;
+				}
+				else
+				{
+					windowRect = ApplicationView.GetForCurrentView().VisibleBounds;
+				}
+
 				var inputPaneRect = InputPane.GetForCurrentView().OccludedRect;
 
 				if (inputPaneRect.Height > 0)
@@ -177,10 +195,10 @@ namespace Windows.UI.Xaml.Controls
 					windowRect.Height -= inputPaneRect.Height;
 				}
 
-				var popupTransform = (MatrixTransform)popup.TransformToVisual(Xaml.Window.Current.Content);
+				var popupTransform = (MatrixTransform)popup.TransformToVisual(XamlRoot.Content);
 				var popupRect = new Rect(popupTransform.Matrix.OffsetX, popupTransform.Matrix.OffsetY, popup.ActualWidth, popup.ActualHeight);
 
-				var containerTransform = (MatrixTransform)_layoutRoot.TransformToVisual(Xaml.Window.Current.Content);
+				var containerTransform = (MatrixTransform)_layoutRoot.TransformToVisual(XamlRoot.Content);
 				var containerRect = new Rect(containerTransform.Matrix.OffsetX, containerTransform.Matrix.OffsetY, _layoutRoot.ActualWidth, _layoutRoot.ActualHeight);
 				var textBoxHeight = _layoutRoot.ActualHeight;
 
@@ -354,14 +372,12 @@ namespace Windows.UI.Xaml.Controls
 				this.Log().Debug($"Query button clicked");
 			}
 
-			SubmitSearch(_suggestionsList.SelectedItem);
+			SubmitSearch(null);
 		}
 
 		private void SubmitSearch(object item)
 		{
-			var finalResult = item ?? GetObjectText(Text);
-
-			QuerySubmitted?.Invoke(this, new AutoSuggestBoxQuerySubmittedEventArgs(finalResult is "" ? null : finalResult, userInput));
+			QuerySubmitted?.Invoke(this, new AutoSuggestBoxQuerySubmittedEventArgs(item, _textBox.Text));
 
 			IsSuggestionListOpen = false;
 		}
@@ -370,19 +386,22 @@ namespace Windows.UI.Xaml.Controls
 		{
 			if (e.Key == Windows.System.VirtualKey.Enter)
 			{
+				e.Handled = true;
 				if (this.Log().IsEnabled(Uno.Foundation.Logging.LogLevel.Debug))
 				{
 					this.Log().Debug($"Enter key pressed");
 				}
 
-				SubmitSearch(_suggestionsList.SelectedItem);
+				SubmitSearch(IsSuggestionListOpen ? _suggestionsList.SelectedItem : null);
 			}
 			else if ((e.Key == Windows.System.VirtualKey.Up || e.Key == Windows.System.VirtualKey.Down) && IsSuggestionListOpen)
 			{
+				e.Handled = true;
 				HandleUpDownKeys(e);
 			}
 			else if (e.Key == Windows.System.VirtualKey.Escape && IsSuggestionListOpen)
 			{
+				e.Handled = true;
 				RevertTextToUserInput();
 				IsSuggestionListOpen = false;
 			}
@@ -427,7 +446,7 @@ namespace Windows.UI.Xaml.Controls
 			ChoseItem(_suggestionsList.SelectedItem);
 		}
 
-		private void ChoseItem(Object o)
+		internal void ChoseItem(Object o)
 		{
 			if (UpdateTextOnSelect)
 			{
@@ -435,6 +454,8 @@ namespace Windows.UI.Xaml.Controls
 			}
 
 			SuggestionChosen?.Invoke(this, new AutoSuggestBoxSuggestionChosenEventArgs(o));
+
+			_textBox?.Select(_textBox.Text.Length, 0);
 		}
 
 		private void RevertTextToUserInput()
@@ -469,6 +490,20 @@ namespace Windows.UI.Xaml.Controls
 
 			if (dependencyObject is AutoSuggestBox tb)
 			{
+				// On some platforms, the TextChangeReason is not updated
+				// as KeyDown is not triggered (e.g. Android)
+				if (tb._textChangeReason != AutoSuggestionBoxTextChangeReason.SuggestionChosen && tb._textBox is not null)
+				{
+					if (tb._textBox.IsUserModifying)
+					{
+						tb._textChangeReason = AutoSuggestionBoxTextChangeReason.UserInput;
+					}
+					else
+					{
+						tb._textChangeReason = AutoSuggestionBoxTextChangeReason.ProgrammaticChange;
+					}
+				}
+
 				tb.UpdateTextBox();
 				tb.UpdateSuggestionList();
 
@@ -482,6 +517,9 @@ namespace Windows.UI.Xaml.Controls
 					Reason = tb._textChangeReason,
 					Owner = tb
 				});
+
+				// Reset the default - otherwise SuggestionChosen could remain set.
+				tb._textChangeReason = AutoSuggestionBoxTextChangeReason.ProgrammaticChange;
 			}
 		}
 

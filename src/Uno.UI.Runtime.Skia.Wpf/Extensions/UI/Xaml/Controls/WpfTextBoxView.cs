@@ -1,9 +1,12 @@
 ﻿#nullable enable
 
 using System;
+using System.Windows;
+using Uno.UI.Hosting;
+using Uno.UI.Runtime.Skia.Wpf.Hosting;
 using Uno.UI.Xaml.Controls.Extensions;
-using Uno.UI.XamlHost.Skia.Wpf.Hosting;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 using WpfCanvas = System.Windows.Controls.Canvas;
 using WpfControl = System.Windows.Controls.Control;
 using WpfElement = System.Windows.FrameworkElement;
@@ -25,10 +28,14 @@ internal abstract class WpfTextBoxView : IOverlayTextBoxView
 
 	public abstract (int start, int length) Selection { get; set; }
 
+	public abstract (int start, int length) SelectionBeforeKeyDown { get; protected set; }
+
 	/// <summary>
 	/// Represents the root element of the input layout.
 	/// </summary>
 	protected abstract WpfElement RootElement { get; }
+
+	public event Windows.UI.Xaml.Controls.TextControlPasteEventHandler? Paste;
 
 	public static IOverlayTextBoxView Create(Windows.UI.Xaml.Controls.TextBox textBox) =>
 		textBox is not Windows.UI.Xaml.Controls.PasswordBox ?
@@ -40,6 +47,17 @@ internal abstract class WpfTextBoxView : IOverlayTextBoxView
 		if (GetOverlayLayer(xamlRoot) is { } layer && RootElement.Parent != layer)
 		{
 			layer.Children.Add(RootElement);
+			DataObject.AddPastingHandler(RootElement, PasteHandler);
+		}
+	}
+
+	private void PasteHandler(object sender, DataObjectPastingEventArgs e)
+	{
+		var args = new TextControlPasteEventArgs();
+		Paste?.Invoke(sender, args);
+		if (args.Handled)
+		{
+			e.CancelCommand();
 		}
 	}
 
@@ -48,6 +66,7 @@ internal abstract class WpfTextBoxView : IOverlayTextBoxView
 		if (RootElement.Parent is WpfCanvas layer)
 		{
 			layer.Children.Remove(RootElement);
+			DataObject.RemovePastingHandler(RootElement, PasteHandler);
 		}
 	}
 
@@ -74,7 +93,7 @@ internal abstract class WpfTextBoxView : IOverlayTextBoxView
 	public virtual void SetPasswordRevealState(Windows.UI.Xaml.Controls.PasswordRevealState passwordRevealState) { }
 
 	internal static WpfCanvas? GetOverlayLayer(XamlRoot xamlRoot) =>
-		XamlRootMap.GetHostForRoot(xamlRoot)?.NativeOverlayLayer;
+		WpfManager.XamlRootMap.GetHostForRoot(xamlRoot)?.NativeOverlayLayer;
 
 	protected void SetFont(WpfControl wpfControl, Windows.UI.Xaml.Controls.TextBox source)
 	{

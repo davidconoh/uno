@@ -208,6 +208,7 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 
 		[Test]
 		[AutoRetry]
+		[ActivePlatforms(Platform.Android, Platform.Browser)] // Disabled on iOS as flaky #9080
 		public async Task TextBox_Readonly()
 		{
 			Run("Uno.UI.Samples.UITests.TextBoxControl.TextBox_IsReadOnly");
@@ -266,7 +267,7 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 
 		[Test]
 		[AutoRetry]
-		[ActivePlatforms(Platform.Browser, Platform.iOS)] // Disabled on Android due to pixel color approximation, will be restored in next PR
+		[ActivePlatforms(Platform.Browser)] // Disabled on Android due to pixel color approximation, will be restored in next PR, flaky on iOS #9080
 		public void PasswordBox_RevealInScrollViewer()
 		{
 			Run("Uno.UI.Samples.Content.UITests.TextBoxControl.PasswordBox_Reveal_Scroll");
@@ -281,6 +282,10 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 
 			// Press the reveal button, and move up (so the ScrollViewer will kick in and cancel the pointer), then release
 			_app.DragCoordinates(passwordBoxRect.X + 10, passwordBoxRect.Right - 10, passwordBoxRect.X - 100, passwordBoxRect.Right - 10);
+
+			// Scrolling may happen differed. If refactoring this test as a runtime tests
+			// Use layoutslot information to ensure visibility.
+			Thread.Sleep(500);
 
 			using var result = TakeScreenshot("result", ignoreInSnapshotCompare: true);
 
@@ -382,9 +387,9 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 			var beforeTextBox = _app.Marked("BeforeTextBox");
 
 			// Enter text and verify that only e is permittable in text box
-			Assert.AreEqual("", beforeTextBox.GetDependencyPropertyValue("Text")?.ToString());
+			_app.WaitForText(beforeTextBox, "");
 			beforeTextBox.EnterText("Enter text and verify that only e is permittable");
-			Assert.AreEqual("eeeeee", beforeTextBox.GetDependencyPropertyValue("Text")?.ToString());
+			_app.WaitForText(beforeTextBox, "eeeeee");
 		}
 
 		[Test]
@@ -482,13 +487,13 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 			textBox1.FastTap();
 			textBox1.ClearText();
 			textBox1.EnterText("Testing text property");
-			Assert.AreEqual("Testing text property", textChangedTextBlock.GetDependencyPropertyValue("Text")?.ToString());
-			Assert.AreEqual("", lostFocusTextBlock.GetDependencyPropertyValue("Text")?.ToString());
+			_app.WaitForText(textChangedTextBlock, "Testing text property");
+			_app.WaitForText(lostFocusTextBlock, "");
 
 			// change focus and assert
 			textBox2.FastTap();
-			Assert.AreEqual("Testing text property", textChangedTextBlock.GetDependencyPropertyValue("Text")?.ToString());
-			Assert.AreEqual("Testing text property", lostFocusTextBlock.GetDependencyPropertyValue("Text")?.ToString());
+			_app.WaitForText(textChangedTextBlock, "Testing text property");
+			_app.WaitForText(lostFocusTextBlock, "Testing text property");
 		}
 
 		[Test]

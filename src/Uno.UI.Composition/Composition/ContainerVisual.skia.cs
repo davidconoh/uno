@@ -2,6 +2,7 @@
 using SkiaSharp;
 using System.Collections.Generic;
 using System.Linq;
+using Uno.UI.Composition;
 
 namespace Windows.UI.Composition;
 
@@ -11,6 +12,11 @@ public partial class ContainerVisual : Visual
 	private bool _hasCustomRenderOrder;
 
 	internal bool IsChildrenRenderOrderDirty { get; set; }
+
+	partial void InitializePartial()
+	{
+		Children.CollectionChanged += (s, e) => IsChildrenRenderOrderDirty = true;
+	}
 
 	internal IList<Visual> GetChildrenInRenderOrder()
 	{
@@ -39,15 +45,15 @@ public partial class ContainerVisual : Visual
 		IsChildrenRenderOrderDirty = false;
 	}
 
-	internal override void Render(SKSurface surface)
+	internal override void Draw(in DrawingSession session)
 	{
-		var compositor = this.Compositor;
+		base.Draw(in session);
+
 		var children = GetChildrenInRenderOrder();
 		var childrenCount = children.Count;
-		for (int i = 0; i < childrenCount; i++)
+		for (var i = 0; i < childrenCount; i++)
 		{
-			compositor.RenderVisual(surface, children[i]);
+			children[i].Render(in session);
 		}
 	}
-
 }

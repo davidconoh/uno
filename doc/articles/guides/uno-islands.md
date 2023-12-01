@@ -1,3 +1,7 @@
+---
+uid: Uno.Tutorials.UnoIslands
+---
+
 # Uno Islands
 
 With Uno Islands you can host Uno Platform XAML controls in an WPF application, next to existing WPF content. This feature enables you to enhance the look, feel, and functionality of your existing WPF application with the latest Windows UI features provided by their implementation within Uno Platform.
@@ -21,7 +25,7 @@ To light-up the Uno Islands feature, we need to reference several Uno Platform N
     <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0" />
     <PackageReference Include="Uno.WinUI.Skia.Wpf" Version="4.5.0" />
-    <PackageReference Include="Uno.WinUI.RemoteControl" Version="4.5.0-dev.453" Condition="'$(Configuration)'=='Debug'" />
+    <PackageReference Include="Uno.WinUI.DevServer" Version="4.5.0-dev.453" Condition="'$(Configuration)'=='Debug'" />
     <PackageReference Include="Uno.UI.Adapter.Microsoft.Extensions.Logging" Version="4.5.0-dev.453" />
     <PackageReference Include="Uno.WinUI.XamlHost" Version="4.5.0-dev.453" />
     <PackageReference Include="Uno.WinUI.XamlHost.Skia.Wpf" Version="4.5.0-dev.453" />

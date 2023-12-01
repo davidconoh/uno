@@ -14,14 +14,13 @@ using System.Collections;
 
 using Uno.UI.Xaml;
 using System.Numerics;
+using Uno.UI;
 
 namespace Windows.UI.Xaml
 {
 	public partial class FrameworkElement : IEnumerable
 	{
-		private readonly static Thickness _thicknessCache = Thickness.Empty;
-
-		public FrameworkElement()
+		protected FrameworkElement()
 		{
 			Initialize();
 		}
@@ -31,18 +30,14 @@ namespace Windows.UI.Xaml
 		partial void Initialize();
 
 
-		public bool HasParent()
+		internal bool HasParent()
 		{
 			return Parent != null;
 		}
 
-		internal void SetActualSize(Size size) => AssignedActualSize = size;
-
 		public double ActualWidth => GetActualWidth();
 
 		public double ActualHeight => GetActualHeight();
-
-		public int InvalidateMeasureCallCount { get; private set; }
 
 		private bool IsTopLevelXamlView() => false;
 
@@ -53,16 +48,26 @@ namespace Windows.UI.Xaml
 
 		public event SizeChangedEventHandler SizeChanged;
 
-		internal void RaiseSizeChanged(SizeChangedEventArgs args)
+		#region Name Dependency Property
+
+		private void OnNameChanged(string oldValue, string newValue)
 		{
-			SizeChanged?.Invoke(this, args);
-			_renderTransform?.UpdateSize(args.NewSize);
+			if (FrameworkElementHelper.IsUiAutomationMappingEnabled)
+			{
+				Windows.UI.Xaml.Automation.AutomationProperties.SetAutomationId(this, newValue);
+			}
 		}
 
-		/// <summary>
-		/// Identifies the Name dependency property.
-		/// </summary>
-		public static new DependencyProperty NameProperty => UIElement.NameProperty;
+		[GeneratedDependencyProperty(DefaultValue = "", ChangedCallback = true)]
+		public static DependencyProperty NameProperty { get; } = CreateNameProperty();
+
+		public string Name
+		{
+			get => GetNameValue();
+			set => SetNameValue(value);
+		}
+
+		#endregion
 
 		#region Margin Dependency Property
 		[GeneratedDependencyProperty(
@@ -73,7 +78,7 @@ namespace Windows.UI.Xaml
 		)]
 		public static DependencyProperty MarginProperty { get; } = CreateMarginProperty();
 
-		public virtual Thickness Margin
+		public Thickness Margin
 		{
 			get => GetMarginValue();
 			set => SetMarginValue(value);

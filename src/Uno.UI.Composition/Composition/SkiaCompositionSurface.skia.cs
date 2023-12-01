@@ -19,8 +19,9 @@ namespace Windows.UI.Composition
 
 		public SKImage? Image { get => _image; }
 
-		internal void LoadFromBytes(byte[] image)
+		internal SkiaCompositionSurface(SKImage image)
 		{
+			_image = image;
 		}
 
 		internal (bool success, object nativeResult) LoadFromStream(int? targetWidth, int? targetHeight, Stream imageStream)
@@ -31,9 +32,7 @@ namespace Windows.UI.Composition
 			{
 				using var codec = SKCodec.Create(stream);
 
-				var info = codec.Info;
-
-				var bitmap = new SKBitmap(actualTargetWidth, actualTargetHeight, info.ColorType, info.IsOpaque ? SKAlphaType.Opaque : SKAlphaType.Premul);
+				var bitmap = new SKBitmap(actualTargetWidth, actualTargetHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
 
 				var result = codec.GetPixels(bitmap.Info, bitmap.GetPixels());
 

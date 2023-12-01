@@ -33,7 +33,7 @@ using Uno.UI.Samples.Controls;
 
 namespace MUXControlsTestApp
 {
-	[Sample("NavigationView", "MUX")]
+	[Sample("NavigationView", "MUX", IgnoreInSnapshotTests = true)]
 	public sealed partial class NavigationViewPage : TestPage
 	{
 		private int m_newItemIndex = 0;
@@ -537,7 +537,7 @@ namespace MUXControlsTestApp
 
 		private void CopyGamesLabelButton_Click(object sender, RoutedEventArgs e)
 		{
-			var popups = VisualTreeHelper.GetOpenPopups(Windows.UI.Xaml.Window.Current);
+			var popups = VisualTreeHelper.GetOpenPopupsForXamlRoot(XamlRoot);
 			if (popups != null && popups.Count > 0)
 			{
 				var popup = popups[0];

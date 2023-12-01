@@ -1,13 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<TargetFrameworks>net6.0-android;net7.0-android</TargetFrameworks>
+		<TargetFrameworks>$(NetPrevious)-android;$(NetCurrent)-android</TargetFrameworks>
+
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<NoWarn>1701;1702;1705;109</NoWarn>
 
 		<!-- generated\src\Java.Interop.__TypeRegistrations.cs(16,6): Error CA1825: Avoid unnecessary zero-length array allocations. -->
 		<!-- generated\src\Uno.UI.UnoRecyclerView.cs(168,25): Error CA1812: 'UnoRecyclerViewInvoker' is an internal class that is apparently never instantiated. -->
+		<!-- generated\src\Java.Interop.__TypeRegistrations.cs(16,6): Error CA1861: Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array -->
 		<!-- TODO: Figure out a way to enable these analyzers back and exclude those generated files only -->
-		<NoWarn>$(NoWarn);CA1825;CA1812</NoWarn>
+		<NoWarn>$(NoWarn);CA1825;CA1812;CA1852;CA1861</NoWarn>
 		<AssemblyName>Uno.UI.BindingHelper.Android</AssemblyName>
 
 		<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
@@ -24,10 +26,19 @@
 		<AndroidSdkBuildToolsVersion Condition="'$(AndroidSdkBuildToolsVersion)' == ''">28.0.3</AndroidSdkBuildToolsVersion>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Xamarin.AndroidX.Legacy.Support.v4" />
+	<!-- This condition isn't always true. -->
+	<!-- Docs generation build uses UnoTargetFrameworkOverride=net7.0, so this project will build with net7.0 instead of net7.0-android -->
+	<!-- If we attempted to always build with net7.0-android, we will go through the annoyance of installing android workload in docs generation CI job -->
+	<ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
 		<PackageReference Include="Xamarin.AndroidX.AppCompat" />
 		<PackageReference Include="Xamarin.AndroidX.RecyclerView" />
+	</ItemGroup>
+
+	<!-- This condition is **explicitly** for net7.0 -->
+	<!-- Don't include this package for any version later than net7.0 -->
+	<!-- Once we remove net7.0 support, this ItemGroup should be deleted. -->
+	<ItemGroup Condition="'$(TargetFramework)' == 'net7.0-android'">
+		<PackageReference Include="Xamarin.AndroidX.Legacy.Support.v4" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -41,8 +52,6 @@
 		<TransformFile Include="Transforms\EnumFields.xml" />
 		<TransformFile Include="Transforms\EnumMethods.xml" />
 	</ItemGroup>
-
-	<Import Project="..\Uno.CrossTargetting.props" />
 
 	<Target Name="_CompileUnoJavaCreateOutputs" BeforeTargets="Build" AfterTargets="Restore">
 		<!--
@@ -78,7 +87,6 @@
 	</ItemGroup>
 
 	<Target Name="_CompileUnoJava"
-			Condition="'$(DesignTimeBuild)' != 'true'"
 			BeforeTargets="@(_CompileUnoJavaBeforeTargets)"
 			AfterTargets="@(_CompileUnoJavaAfterTargets)"
 			Inputs="@(_JavaFile)"

@@ -39,8 +39,12 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests.RepeaterTests
 {
 	[TestClass]
 	[RequiresFullWindow]
+	[Uno.UI.RuntimeTests.RunsOnUIThread]
 	public class RepeaterFocusTests : MUXApiTestBase
 	{
+#if __MACOS__
+		[Ignore("Currently fails on macOS, part of #9282 epic")]
+#endif
 		[TestMethod]
 		public async Task ValidateTabNavigation()
 		{
@@ -49,6 +53,13 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests.RepeaterTests
 				Log.Warning("Test is disabled on anything lower than RS3 because the GetChildrenInTabFocusOrder API is not available on previous versions.");
 				return;
 			}
+
+#if HAS_UNO
+			if (TestServices.WindowHelper.IsXamlIsland)
+			{
+				return;
+			}
+#endif
 
 			ItemsRepeater repeater = null;
 			ScrollViewer scrollViewer = null;

@@ -2,25 +2,26 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices.JavaScript;
 using System.Threading.Tasks;
 using Windows.UI.Core;
 using Uno.Extensions.Specialized;
 using Uno.Foundation;
 using System.Threading;
 
+using NativeMethods = __Windows.ApplicationModel.DataTransfer.Clipboard.NativeMethods;
+
 namespace Windows.ApplicationModel.DataTransfer
 {
 	public static partial class Clipboard
 	{
-		private const string JsType = "Uno.Utils.Clipboard";
-
 		public static void Clear() => SetClipboardText(string.Empty);
 
 		public static void SetContent(DataPackage/* ? */ content)
 		{
-			_ = Uno.UI.Dispatching.CoreDispatcher.Main.RunAsync(
-				Uno.UI.Dispatching.CoreDispatcherPriority.High,
-				() => _ = SetContentAsync(content));
+			Uno.UI.Dispatching.NativeDispatcher.Main.Enqueue(
+				() => _ = SetContentAsync(content),
+				Uno.UI.Dispatching.NativeDispatcherPriority.High);
 		}
 
 		internal static async Task SetContentAsync(DataPackage/* ? */ content)
@@ -44,32 +45,26 @@ namespace Windows.ApplicationModel.DataTransfer
 
 		private static async Task<string> GetClipboardText(CancellationToken ct)
 		{
-			var command = $"{JsType}.getText();";
-			var text = await WebAssemblyRuntime.InvokeAsync(command, ct);
-
-			return text;
+			return await NativeMethods.GetTextAsync();
 		}
 
 		private static void SetClipboardText(string text)
 		{
-			var escapedText = WebAssemblyRuntime.EscapeJs(text);
-			var command = $"{JsType}.setText(\"{escapedText}\");";
-			WebAssemblyRuntime.InvokeJS(command);
+			NativeMethods.SetText(text);
 		}
 
 		private static void StartContentChanged()
 		{
-			var command = $"{JsType}.startContentChanged()";
-			WebAssemblyRuntime.InvokeJS(command);
+			NativeMethods.StartContentChanged();
 		}
 
 		private static void StopContentChanged()
 		{
-			var command = $"{JsType}.stopContentChanged()";
-			WebAssemblyRuntime.InvokeJS(command);
+			NativeMethods.StopContentChanged();
 		}
 
-		public static int DispatchContentChanged()
+		[JSExport]
+		internal static int DispatchContentChanged()
 		{
 			OnContentChanged();
 			return 0;

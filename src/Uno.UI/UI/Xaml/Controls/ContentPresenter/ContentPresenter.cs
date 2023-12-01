@@ -13,14 +13,14 @@ using Windows.Foundation;
 using Uno.UI;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Text;
-
 using Uno.UI.Xaml;
-#if XAMARIN_ANDROID
+
+#if __ANDROID__
 using View = Android.Views.View;
 using ViewGroup = Android.Views.ViewGroup;
 using Font = Android.Graphics.Typeface;
 using Android.Graphics;
-#elif XAMARIN_IOS_UNIFIED
+#elif __IOS__
 using UIKit;
 using View = UIKit.UIView;
 using ViewGroup = UIKit.UIView;
@@ -32,7 +32,7 @@ using View = AppKit.NSView;
 using ViewGroup = AppKit.NSView;
 using Color = AppKit.NSColor;
 using Font = AppKit.NSFont;
-#elif UNO_REFERENCE_API || NET461
+#elif UNO_REFERENCE_API || IS_UNIT_TESTS
 using View = Windows.UI.Xaml.UIElement;
 using ViewGroup = Windows.UI.Xaml.UIElement;
 #endif
@@ -40,7 +40,10 @@ using ViewGroup = Windows.UI.Xaml.UIElement;
 namespace Windows.UI.Xaml.Controls
 {
 	[ContentProperty(Name = "Content")]
-	public partial class ContentPresenter : FrameworkElement, ICustomClippingElement, IFrameworkTemplatePoolAware
+	public partial class ContentPresenter : FrameworkElement, IFrameworkTemplatePoolAware
+#if !__CROSSRUNTIME__ && !IS_UNIT_TESTS
+		, ICustomClippingElement
+#endif
 	{
 		private bool _firstLoadResetDone;
 		private View _contentTemplateRoot;
@@ -52,6 +55,7 @@ namespace Windows.UI.Xaml.Controls
 
 		private void InitializeContentPresenter()
 		{
+			SetDefaultForeground(ForegroundProperty);
 		}
 
 		/// <summary>
@@ -75,7 +79,7 @@ namespace Windows.UI.Xaml.Controls
 
 		#region Content DependencyProperty
 
-		public virtual object Content
+		public object Content
 		{
 			get { return (object)GetValue(ContentProperty); }
 			set { SetValue(ContentProperty, value); }
@@ -184,7 +188,7 @@ namespace Windows.UI.Xaml.Controls
 		#region Foreground Dependency Property
 
 		public
-#if __ANDROID_23__
+#if __ANDROID__
 		new
 #endif
 		Brush Foreground
@@ -380,7 +384,7 @@ namespace Windows.UI.Xaml.Controls
 		#region TextAlignment Dependency Property
 
 		public
-#if XAMARIN_ANDROID
+#if __ANDROID__
 			new
 #endif
 			TextAlignment TextAlignment
@@ -482,6 +486,7 @@ namespace Windows.UI.Xaml.Controls
 				typeof(ContentPresenter),
 				new FrameworkPropertyMetadata(
 					(Thickness)Thickness.Empty,
+					FrameworkPropertyMetadataOptions.AffectsMeasure,
 					(s, e) => ((ContentPresenter)s)?.OnPaddingChanged((Thickness)e.OldValue, (Thickness)e.NewValue)
 				)
 			);
@@ -510,6 +515,7 @@ namespace Windows.UI.Xaml.Controls
 				typeof(ContentPresenter),
 				new FrameworkPropertyMetadata(
 					(Thickness)Thickness.Empty,
+					FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsArrange,
 					(s, e) => ((ContentPresenter)s)?.OnBorderThicknessChanged((Thickness)e.OldValue, (Thickness)e.NewValue)
 				)
 			);
@@ -542,6 +548,13 @@ namespace Windows.UI.Xaml.Controls
 
 		private void OnBorderBrushChanged(Brush oldValue, Brush newValue)
 		{
+#if __WASM__
+			if (((oldValue is null) ^ (newValue is null)) && BorderThickness != default)
+			{
+				// The transition from null to non-null (and vice-versa) affects child arrange on Wasm when non-zero BorderThickness is specified.
+				(Content as UIElement)?.InvalidateArrange();
+			}
+#endif
 			UpdateBorder();
 		}
 
@@ -619,6 +632,8 @@ namespace Windows.UI.Xaml.Controls
 
 			if (newValue is not null)
 			{
+				TryRegisterNativeElement(newValue);
+
 				TrySetDataContextFromContent(newValue);
 
 				SetUpdateTemplate();
@@ -655,7 +670,7 @@ namespace Windows.UI.Xaml.Controls
 			SetImplicitContent();
 		}
 
-		protected virtual void OnContentTemplateChanged(DataTemplate oldTemplate, DataTemplate newTemplate)
+		protected virtual void OnContentTemplateChanged(DataTemplate oldContentTemplate, DataTemplate newContentTemplate)
 		{
 			if (ContentTemplateRoot != null)
 			{
@@ -665,13 +680,13 @@ namespace Windows.UI.Xaml.Controls
 			SetUpdateTemplate();
 		}
 
-		private void OnContentTemplateSelectorChanged(DataTemplateSelector dataTemplateSelector1, DataTemplateSelector dataTemplateSelector2)
+		protected virtual void OnContentTemplateSelectorChanged(DataTemplateSelector oldContentTemplateSelector, DataTemplateSelector newContentTemplateSelector)
 		{
 		}
 
 		partial void UnregisterContentTemplateRoot();
 
-		public virtual View ContentTemplateRoot
+		public View ContentTemplateRoot
 		{
 			get
 			{
@@ -799,16 +814,18 @@ namespace Windows.UI.Xaml.Controls
 			SynchronizeContentTemplatedParent();
 
 			UpdateBorder();
+
+			TryAttachNativeElement();
 		}
 
-#if __ANDROID__ || __IOS__ || __MACOS__
 		private protected override void OnUnloaded()
 		{
 			base.OnUnloaded();
 
-			_borderRenderer.Clear();
+			ClearBorder();
+
+			TryDetachNativeElement();
 		}
-#endif
 
 		private bool ResetDataContextOnFirstLoad()
 		{
@@ -816,11 +833,18 @@ namespace Windows.UI.Xaml.Controls
 			{
 				_firstLoadResetDone = true;
 
-				// On first load UWP clears the local value of a ContentPresenter.
-				// The reason for this behavior is unknown.
-				this.ClearValue(DataContextProperty, DependencyPropertyValuePrecedences.Local);
+				// This test avoids the ContentPresenter from resetting
+				// the DataContext to null (or the inherited value) and then back to
+				// the content and have two-way bindings propagating the null value
+				// back to the source.
+				if (!ReferenceEquals(DataContext, Content))
+				{
+					// On first load UWP clears the local value of a ContentPresenter.
+					// The reason for this behavior is unknown.
+					this.ClearValue(DataContextProperty, DependencyPropertyValuePrecedences.Local);
 
-				TrySetDataContextFromContent(Content);
+					TrySetDataContextFromContent(Content);
+				}
 
 				return true;
 			}
@@ -910,12 +934,15 @@ namespace Windows.UI.Xaml.Controls
 					}
 				);
 
-			setBinding(TextBlock.TextProperty, nameof(Content));
-			setBinding(TextBlock.HorizontalAlignmentProperty, nameof(HorizontalContentAlignment));
-			setBinding(TextBlock.VerticalAlignmentProperty, nameof(VerticalContentAlignment));
-			setBinding(TextBlock.TextWrappingProperty, nameof(TextWrapping));
-			setBinding(TextBlock.MaxLinesProperty, nameof(MaxLines));
-			setBinding(TextBlock.TextAlignmentProperty, nameof(TextAlignment));
+			if (!IsNativeHost)
+			{
+				setBinding(TextBlock.TextProperty, nameof(Content));
+				setBinding(TextBlock.HorizontalAlignmentProperty, nameof(HorizontalContentAlignment));
+				setBinding(TextBlock.VerticalAlignmentProperty, nameof(VerticalContentAlignment));
+				setBinding(TextBlock.TextWrappingProperty, nameof(TextWrapping));
+				setBinding(TextBlock.MaxLinesProperty, nameof(MaxLines));
+				setBinding(TextBlock.TextAlignmentProperty, nameof(TextAlignment));
+			}
 
 			ContentTemplateRoot = textBlock;
 			IsUsingDefaultTemplate = true;
@@ -978,6 +1005,9 @@ namespace Windows.UI.Xaml.Controls
 			// base.OnBackgroundChanged(e);
 
 			UpdateBorder();
+#if __WASM__
+			SetAndObserveBackgroundBrush(e.OldValue as Brush, e.NewValue as Brush);
+#endif
 		}
 
 		internal override void UpdateThemeBindings(ResourceUpdateReason updateReason)
@@ -986,7 +1016,7 @@ namespace Windows.UI.Xaml.Controls
 			SetDefaultForeground(ForegroundProperty);
 		}
 
-#if XAMARIN_ANDROID
+#if __ANDROID__
 		// Support for the C# collection initializer style.
 		public void Add(View view)
 		{
@@ -1042,6 +1072,8 @@ namespace Windows.UI.Xaml.Controls
 					contentSize.Height);
 
 				ArrangeElement(child, arrangeRect);
+
+				ArrangeNativeElement(arrangeRect);
 			}
 
 			return finalSize;
@@ -1102,12 +1134,16 @@ namespace Windows.UI.Xaml.Controls
 			var padding = Padding;
 			var borderThickness = BorderThickness;
 
-			var measuredSize = base.MeasureOverride(
+			var measuredSize = MeasureFirstChild(
 				new Size(
 					size.Width - padding.Left - padding.Right - borderThickness.Left - borderThickness.Right,
 					size.Height - padding.Top - padding.Bottom - borderThickness.Top - borderThickness.Bottom
 				)
 			);
+
+#if UNO_SUPPORTS_NATIVEHOST
+			measuredSize = MeasureNativeElement(measuredSize);
+#endif
 
 			return new Size(
 				measuredSize.Width + padding.Left + padding.Right + borderThickness.Left + borderThickness.Right,
@@ -1120,5 +1156,25 @@ namespace Windows.UI.Xaml.Controls
 		internal override bool CanHaveChildren() => true;
 
 		internal override bool IsViewHit() => Border.IsViewHitImpl(this);
+
+		/// <summary>
+		/// Registers the provided native element in the native shell
+		/// </summary>
+		partial void TryRegisterNativeElement(object newValue);
+
+		/// <summary>
+		/// Attaches the current native element in the native shell
+		/// </summary>
+		partial void TryAttachNativeElement();
+
+		/// <summary>
+		/// Detaches the current native element from the native shell
+		/// </summary>
+		partial void TryDetachNativeElement();
+
+		/// <summary>
+		/// Arranges the native element in the native shell
+		/// </summary>
+		partial void ArrangeNativeElement(Windows.Foundation.Rect arrangeRect);
 	}
 }

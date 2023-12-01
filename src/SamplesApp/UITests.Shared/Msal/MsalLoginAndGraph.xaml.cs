@@ -44,9 +44,6 @@ namespace UITests.Msal
 				.WithTenantId(TENANT_ID)
 				.WithRedirectUri(REDIRECT_URI)
 				.WithUnoHelpers()
-#if __IOS__ && !NET6_0_OR_GREATER
-				.WithIosKeychainSecurityGroup("com.companyname.SamplesApp")
-#endif
 				.Build();
 		}
 
@@ -72,11 +69,7 @@ namespace UITests.Msal
 				using (var stream = await client.Me.Photo.Content.Request().GetAsync())
 				{
 					var bitmap = new BitmapImage();
-#if HAS_UNO
-					bitmap.SetSource(new MemoryStream(stream.ReadBytes()));
-#else
 					await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
-#endif
 					thumbnail.Source = bitmap;
 				}
 			}

@@ -1,19 +1,15 @@
-using CoreGraphics;
-using ObjCRuntime;
-using Uno.UI.DataBinding;
-using Uno.UI.Views.Controls;
 using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
+using CoreGraphics;
+using Foundation;
+using ObjCRuntime;
 using UIKit;
 using Uno.Extensions;
+using Uno.UI.Controls;
 using Uno.UI.Extensions;
 using Windows.UI.Xaml.Media;
-using Uno.UI.Controls;
 using Windows.UI;
 using Uno.Disposables;
-using Foundation;
 using Uno.Foundation.Logging;
 using Uno.UI;
 using static Uno.UI.FeatureConfiguration;
@@ -24,7 +20,7 @@ namespace Windows.UI.Xaml.Controls
 	{
 		private SinglelineTextBoxDelegate _delegate;
 		private readonly WeakReference<TextBox> _textBox;
-		private readonly SerialDisposable _foregroundChanged = new();
+		private Action _foregroundChanged;
 
 		public SinglelineTextBoxView(TextBox textBox)
 		{
@@ -32,6 +28,26 @@ namespace Windows.UI.Xaml.Controls
 
 			InitializeBinder();
 			Initialize();
+		}
+
+		public override void Paste(NSObject sender) => HandlePaste(() => base.Paste(sender));
+
+		public override void PasteAndGo(NSObject sender) => HandlePaste(() => base.PasteAndGo(sender));
+
+		public override void PasteAndMatchStyle(NSObject sender) => HandlePaste(() => base.PasteAndMatchStyle(sender));
+
+		public override void PasteAndSearch(NSObject sender) => HandlePaste(() => base.PasteAndSearch(sender));
+
+		public override void Paste(NSItemProvider[] itemProviders) => HandlePaste(() => base.Paste(itemProviders));
+
+		private void HandlePaste(Action baseAction)
+		{
+			var args = new TextControlPasteEventArgs();
+			TextBox?.RaisePaste(args);
+			if (!args.Handled)
+			{
+				baseAction.Invoke();
+			}
 		}
 
 		internal TextBox TextBox => _textBox.GetTarget();
@@ -182,17 +198,12 @@ namespace Windows.UI.Xaml.Controls
 
 		public void OnForegroundChanged(Brush oldValue, Brush newValue)
 		{
-			_foregroundChanged.Disposable = null;
 			var textBox = _textBox.GetTarget();
-
 			if (textBox != null)
 			{
-				var scb = newValue as SolidColorBrush;
-
-				if (scb != null)
+				if (newValue is SolidColorBrush scb)
 				{
-					_foregroundChanged.Disposable = Brush.AssignAndObserveBrush(scb, _ => ApplyColor());
-					ApplyColor();
+					Brush.SetupBrushChanged(oldValue, newValue, ref _foregroundChanged, () => ApplyColor());
 
 					void ApplyColor()
 					{

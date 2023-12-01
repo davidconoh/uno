@@ -19,12 +19,10 @@ using Uno.UI;
 using Windows.UI.Xaml.Data;
 using Uno.UI.Extensions;
 
-#if XAMARIN_IOS_UNIFIED
 using Foundation;
 using UIKit;
 using CoreGraphics;
 using CoreAnimation;
-#endif
 
 #if HAS_UNO_WINUI
 using Microsoft.UI.Input;
@@ -217,15 +215,15 @@ namespace Windows.UI.Xaml.Controls
 					{
 						base.InsertItems(indexPaths);
 					}
-#if NET6_0_OR_GREATER
 					catch (Exception e)
-#else
-					catch (MonoTouchException e)
-#endif
 					{
 						this.Log().Error("Error when updating collection", e);
 					}
 				}
+			}
+			else
+			{
+				NativeLayout?.NeedsRelayout();
 			}
 		}
 
@@ -245,11 +243,7 @@ namespace Windows.UI.Xaml.Controls
 					{
 						base.InsertSections(sections);
 					}
-#if NET6_0_OR_GREATER
 					catch (Exception e)
-#else
-					catch (MonoTouchException e)
-#endif
 					{
 						this.Log().Error("Error when updating collection", e);
 					}
@@ -273,11 +267,7 @@ namespace Windows.UI.Xaml.Controls
 					{
 						base.DeleteItems(indexPaths);
 					}
-#if NET6_0_OR_GREATER
 					catch (Exception e)
-#else
-					catch (MonoTouchException e)
-#endif
 					{
 						this.Log().Error("Error when updating collection", e);
 					}
@@ -301,11 +291,7 @@ namespace Windows.UI.Xaml.Controls
 					{
 						base.DeleteSections(sections);
 					}
-#if NET6_0_OR_GREATER
 					catch (Exception e)
-#else
-					catch (MonoTouchException e)
-#endif
 					{
 						this.Log().Error("Error when updating collection", e);
 					}
@@ -370,7 +356,7 @@ namespace Windows.UI.Xaml.Controls
 		{
 			if (UseCollectionAnimations)
 			{
-				return null;
+				return Disposable.Empty;
 			}
 
 			AnimationsEnabled = false;
@@ -778,6 +764,56 @@ namespace Windows.UI.Xaml.Controls
 		}
 
 		#region Touches
+		private UIElement _touchTarget;
+
+		/// <inheritdoc />
+		public override void TouchesBegan(NSSet touches, UIEvent evt)
+		{
+			base.TouchesBegan(touches, evt);
+
+			// We wait for the first touches to get the parent so we don't have to track Loaded/UnLoaded
+			// Like native dispatch on iOS, we do "implicit captures" of the target.
+			if (this.GetParent() is UIElement parent)
+			{
+				// canBubbleNatively: true => We let native bubbling occur properly as it's never swallowed by the system
+				//							  but blocking it would be breaking in a lot of aspects
+				//							  (e.g. it would prevent all subsequent events for the given pointer).
+
+				_touchTarget = parent;
+				_touchTarget.TouchesBegan(touches, evt, canBubbleNatively: true);
+			}
+		}
+
+		/// <inheritdoc />
+		public override void TouchesMoved(NSSet touches, UIEvent evt)
+		{
+			base.TouchesMoved(touches, evt);
+
+			// canBubbleNatively: false => The system might silently swallow pointers after a few moves so we prefer to bubble in managed.
+			_touchTarget?.TouchesMoved(touches, evt, canBubbleNatively: false);
+		}
+
+		/// <inheritdoc />
+		public override void TouchesEnded(NSSet touches, UIEvent evt)
+		{
+			base.TouchesEnded(touches, evt);
+
+			// canBubbleNatively: false => system might silently swallow the pointer after a few moves so we prefer to bubble in managed.
+			_touchTarget?.TouchesEnded(touches, evt, canBubbleNatively: false);
+			_touchTarget = null;
+		}
+
+		/// <inheritdoc />
+		public override void TouchesCancelled(NSSet touches, UIEvent evt)
+		{
+			base.TouchesCancelled(touches, evt);
+
+			// canBubbleNatively: false => system might silently swallow the pointer after a few moves so we prefer to bubble in managed.
+			_touchTarget?.TouchesCancelled(touches, evt, canBubbleNatively: false);
+			_touchTarget = null;
+		}
+
+
 		private TouchesManager _touchesManager;
 
 		internal TouchesManager TouchesManager => _touchesManager ??= new NativeListViewBaseTouchesManager(this);

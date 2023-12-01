@@ -1,5 +1,5 @@
 // ******************************************************************
-// Copyright � 2015-2018 nventive inc. All rights reserved.
+// Copyright � 2015-2018 Uno Platform Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,23 +82,6 @@ namespace Uno.Collections
 			var values = _instances.GetValue(owner, CreateDictionary);
 
 			values[key] = value;
-		}
-
-
-		/// <summary>
-		/// Copies all values from one owner to another.
-		/// </summary>
-		/// <param name="existingOwner">The <typeparamref name="TOwner"/> to take values from.</param>
-		/// <param name="newOwner">The <typeparamref name="TOwner"/> to assign values to.</param>
-		public void CopyValues(TOwner existingOwner, TOwner newOwner)
-		{
-			var existingValues = _instances.GetValue(existingOwner, CreateDictionary);
-			var newValues = _instances.GetValue(newOwner, CreateDictionary);
-
-			foreach (var key in existingValues.Keys)
-			{
-				newValues[key] = existingValues[key];
-			}
 		}
 	}
 }

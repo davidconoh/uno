@@ -1,4 +1,4 @@
-﻿#if !NET461
+﻿#if !IS_UNIT_TESTS
 #nullable enable
 
 using System;
@@ -265,8 +265,8 @@ namespace Windows.UI.Xaml.Controls
 				// Set the seed start to use the approximate position of
 				// the line based on the average line height.
 				var index = (int)(ScrollOffset / _averageLineHeight);
-				_dynamicSeedStart = ScrollOffset - _averageLineHeight;
-				_dynamicSeedIndex = Uno.UI.IndexPath.FromRowSection(index - sign, 0);
+				_dynamicSeedStart = index * _averageLineHeight;
+				_dynamicSeedIndex = Uno.UI.IndexPath.FromRowSection(index - 1, 0);
 			}
 
 			while (unappliedDelta > 0)
@@ -850,7 +850,7 @@ namespace Windows.UI.Xaml.Controls
 		/// <summary>
 		/// Get 'seed' index for recreating the visual state of the list after <see cref="ScrapLayout()"/>;
 		/// </summary>
-		protected virtual Uno.UI.IndexPath? GetDynamicSeedIndex(Uno.UI.IndexPath? firstVisibleItem)
+		private protected virtual Uno.UI.IndexPath? GetDynamicSeedIndex(Uno.UI.IndexPath? firstVisibleItem)
 		{
 			var lastItem = ItemsControl?.GetLastItem();
 			if (lastItem == null ||
@@ -911,11 +911,11 @@ namespace Windows.UI.Xaml.Controls
 		/// <summary>
 		/// Create a new line.
 		/// </summary>
-		protected abstract Line CreateLine(GeneratorDirection fillDirection, double extentOffset, double availableBreadth, Uno.UI.IndexPath nextVisibleItem);
+		private protected abstract Line CreateLine(GeneratorDirection fillDirection, double extentOffset, double availableBreadth, Uno.UI.IndexPath nextVisibleItem);
 
 		protected abstract int GetItemsPerLine();
 
-		protected int GetFlatItemIndex(Uno.UI.IndexPath indexPath) => ItemsControl?.GetIndexFromIndexPath(indexPath) ?? -1;
+		private protected int GetFlatItemIndex(Uno.UI.IndexPath indexPath) => ItemsControl?.GetIndexFromIndexPath(indexPath) ?? -1;
 
 		protected void AddView(FrameworkElement view, GeneratorDirection fillDirection, double extentOffset, double breadthOffset)
 		{
@@ -991,7 +991,9 @@ namespace Windows.UI.Xaml.Controls
 				return GetMeasuredEnd(lastView);
 			}
 
-			// This will be null except immediately after ScrapLayout(), when it will be the previous start of materialized items
+			// This will be null except
+			// * immediately after ScrapLayout(), where it will be the previous start of materialized items
+			// * during OnScrollChanged if isLargeScroll, where it will be the start of a new layout after all the lines were cleared
 			return _dynamicSeedStart;
 		}
 
@@ -1102,16 +1104,6 @@ namespace Windows.UI.Xaml.Controls
 			return $"Parent ItemsControl={ItemsControl} ItemsSource={ItemsControl?.ItemsSource} NoOfItems={ItemsControl?.NumberOfItems} FirstMaterialized={GetFirstMaterializedIndexPath()} LastMaterialized={GetLastMaterializedIndexPath()} ExtendedViewportStart={ExtendedViewportStart} ExtendedViewportEnd={ExtendedViewportEnd} GetItemsStart()={GetItemsStart()} GetItemsEnd()={GetItemsEnd()}";
 		}
 
-#if __WASM__ || __SKIA__
-		private static Point GetRelativePosition(FrameworkElement child) => child.RelativePosition;
-#elif __NETSTD_REFERENCE__
-		private static Point GetRelativePosition(FrameworkElement child) => throw new NotSupportedException();
-#elif __MACOS__ || __IOS__
-		private static Point GetRelativePosition(FrameworkElement child) => child.Frame.Location;
-#elif __ANDROID__
-		private static Point GetRelativePosition(FrameworkElement child) => new Point(ViewHelper.PhysicalToLogicalPixels(child.Left), ViewHelper.PhysicalToLogicalPixels(child.Top));
-#endif
-
 		private (double offset, double extent, object item, Uno.UI.IndexPath? index)? _pendingReorder;
 		internal void UpdateReorderingItem(Point location, FrameworkElement element, object item)
 		{
@@ -1156,7 +1148,7 @@ namespace Windows.UI.Xaml.Controls
 		protected bool ShouldInsertReorderingView(double extentOffset)
 			=> _pendingReorder is { } reorder && reorder.offset > extentOffset && reorder.offset <= extentOffset + reorder.extent;
 
-		protected Uno.UI.IndexPath? GetAndUpdateReorderingIndex()
+		private protected Uno.UI.IndexPath? GetAndUpdateReorderingIndex()
 		{
 			if (_pendingReorder is { } reorder)
 			{
@@ -1187,7 +1179,7 @@ namespace Windows.UI.Xaml.Controls
 		/// <summary>
 		/// Represents a single row in a vertically-scrolling panel, or a column in a horizontally-scrolling panel.
 		/// </summary>
-		protected class Line
+		private protected class Line
 		{
 			public (FrameworkElement container, Uno.UI.IndexPath index)[] Items { get; }
 			public Uno.UI.IndexPath FirstItem { get; }

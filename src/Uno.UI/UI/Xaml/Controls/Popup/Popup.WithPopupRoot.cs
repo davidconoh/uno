@@ -1,5 +1,4 @@
-﻿#if __ANDROID__ || __WASM__ || __SKIA__
-using Uno.Extensions;
+﻿using Uno.Extensions;
 using Uno.Disposables;
 using Uno.Foundation.Logging;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -7,13 +6,13 @@ using System;
 using Windows.UI.Xaml.Media;
 using Uno.UI;
 using Uno.UI.Xaml.Core;
-using CoreServices = Uno.UI.Xaml.Core.CoreServices;
+using WinUICoreServices = Uno.UI.Xaml.Core.CoreServices;
 
 namespace Windows.UI.Xaml.Controls.Primitives;
 
 public partial class Popup
 {
-	private readonly SerialDisposable _closePopup = new SerialDisposable();
+	private readonly SerialDisposable _closePopup = new();
 
 #if __ANDROID__
 	private bool _useNativePopup = FeatureConfiguration.Popup.UseNativePopup;
@@ -86,25 +85,35 @@ public partial class Popup
 			{
 #if !HAS_UNO_WINUI
 				// In UWP, XamlRoot is set automatically to CoreWindow XamlRoot if not set beforehand.
-				if (XamlRoot is null && Child?.XamlRoot is null)
+				if (XamlRoot is null && Child?.XamlRoot is null && WinUICoreServices.Instance.InitializationType != InitializationType.IslandsOnly)
 				{
-					XamlRoot = CoreServices.Instance.ContentRootCoordinator.CoreWindowContentRoot.XamlRoot;
+					XamlRoot = WinUICoreServices.Instance.ContentRootCoordinator.CoreWindowContentRoot.XamlRoot;
 				}
 #endif
 
-#if !__SKIA__ // The OpenPopup method should be moved out of Window in general https://github.com/unoplatform/uno/issues/8978
-				_closePopup.Disposable = Window.Current.OpenPopup(this);
-#else
-				var currentXamlRoot = XamlRoot ?? Child?.XamlRoot ?? CoreServices.Instance.ContentRootCoordinator.CoreWindowContentRoot.XamlRoot;
-				_closePopup.Disposable = currentXamlRoot?.OpenPopup(this);
-#endif
+				// It's important for PopupPanel to be visible before the popup is opened so that
+				// child controls can be IsFocusable, which depends on all ancestors (including PopupPanel)
+				// being visible
 				PopupPanel.Visibility = Visibility.Visible;
+
+				var currentXamlRoot = XamlRoot ?? Child?.XamlRoot ?? WinUICoreServices.Instance.ContentRootCoordinator.CoreWindowContentRoot.XamlRoot;
+				_closePopup.Disposable = currentXamlRoot?.OpenPopup(this);
+
 			}
 			else
 			{
 				_closePopup.Disposable = null;
 				PopupPanel.Visibility = Visibility.Collapsed;
 			}
+		}
+
+		if (newIsOpen)
+		{
+			Opened?.Invoke(this, newIsOpen);
+		}
+		else
+		{
+			Closed?.Invoke(this, newIsOpen);
 		}
 	}
 
@@ -139,4 +148,3 @@ public partial class Popup
 	partial void OnPopupPanelChangedPartialNative(PopupPanel previousPanel, PopupPanel newPanel);
 #endif
 }
-#endif

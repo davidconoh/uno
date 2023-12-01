@@ -1,3 +1,7 @@
+---
+uid: Uno.Development.Splashscreen
+---
+
 # How to add a Splash Screen
 
 This article covers how to add a splash screen to your application.
@@ -13,7 +17,7 @@ This article covers how to add a splash screen to your application.
   * **Universal Windows Platform** workload installed
   * **Mobile Development with .NET (Xamarin)** workload installed
   * **ASP**.**NET and web** workload installed
-  * [Uno Platform Extension](https://marketplace.visualstudio.com/items?itemName=nventivecorp.uno-platform-addin) installed
+  * [Uno Platform Extension](https://marketplace.visualstudio.com/items?itemName=unoplatform.uno-platform-addin-2022) installed
 
 # [VS Code](#tab/tabid-vscode)
 
@@ -26,16 +30,6 @@ This article covers how to add a splash screen to your application.
     * [.NET Core 5.0 SDK](https://dotnet.microsoft.com/download/dotnet-core/5.0) (**version 5.0 (SDK 5.0.100)** or later)
 
     > Use `dotnet --version` from the terminal to get the version installed.
-
-# [Visual Studio for Mac](#tab/tabid-vsmac)
-
-* [**Visual Studio for Mac 8.8**](https://visualstudio.microsoft.com/vs/mac/)
-* [**Xcode**](https://apps.apple.com/us/app/xcode/id497799835?mt=12) 10.0 or higher
-* An [**Apple ID**](https://support.apple.com/en-us/HT204316)
-* **.NET Core SDK**
-    * [.NET Core 3.1 SDK](https://dotnet.microsoft.com/download/dotnet-core/3.1) (**version 3.1.8 (SDK 3.1.402)** or later)
-    * [.NET Core 5.0 SDK](https://dotnet.microsoft.com/download/dotnet-core/5.0) (**version 5.0 (SDK 5.0.100)** or later)
-* [**GTK+3**](https://formulae.brew.sh/formula/gtk+3) for running the Skia/GTK projects
 
 # [JetBrains Rider](#tab/tabid-rider)
 

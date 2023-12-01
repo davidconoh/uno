@@ -16,12 +16,9 @@ namespace Windows.UI.Xaml.Controls
 {
 	public partial class Control
 	{
-		/// This binary compatibility workaround that can be removed
-		public new static DependencyProperty IsEnabledProperty => FrameworkElement.IsEnabledProperty;
-
 		public Control() : this("div") { }
 
-		public Control(string htmlTag) : base(htmlTag)
+		internal Control(string htmlTag) : base(htmlTag)
 		{
 			InitializeControl();
 		}
@@ -55,6 +52,6 @@ namespace Windows.UI.Xaml.Controls
 			SetAttribute("tabindex", isFocusable ? "0" : "-1");
 		}
 
-		protected virtual bool IsDelegatingFocusToTemplateChild() => false;
+		private protected virtual bool IsDelegatingFocusToTemplateChild() => false;
 	}
 }

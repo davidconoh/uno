@@ -14,6 +14,7 @@ using Uno.Foundation.Logging;
 using Uno.UI;
 using _DragEventArgs = global::Windows.UI.Xaml.DragEventArgs;
 using Windows.UI.Xaml.Controls.Primitives;
+using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Media.Imaging;
 
 namespace Windows.UI.Xaml.Controls
@@ -24,6 +25,7 @@ namespace Windows.UI.Xaml.Controls
 		private const string ReorderItemFormatId = DataPackage.UnoPrivateDataPrefix + "__list__view__base__source__item__";
 		private const string ReorderContainerFormatId = DataPackage.UnoPrivateDataPrefix + "__list__view__base__source__container__";
 		private const string DragItemsFormatId = DataPackage.UnoPrivateDataPrefix + "__list__view__base__items__";
+		internal bool IsCustomReorder;
 
 		public event DragItemsStartingEventHandler DragItemsStarting;
 		public event TypedEventHandler<ListViewBase, DragItemsCompletedEventArgs> DragItemsCompleted;
@@ -152,11 +154,13 @@ namespace Windows.UI.Xaml.Controls
 					that.DragLeave -= OnReorderDragLeave;
 					that.Drop -= OnReorderCompleted;
 
-					that.DragEnter += OnReorderDragUpdated;
-					that.DragOver += OnReorderDragUpdated;
-					that.DragLeave += OnReorderDragLeave;
-					that.Drop += OnReorderCompleted;
-
+					if (!that.IsCustomReorder)
+					{
+						that.DragEnter += OnReorderDragUpdated;
+						that.DragOver += OnReorderDragUpdated;
+						that.DragLeave += OnReorderDragLeave;
+						that.Drop += OnReorderCompleted;
+					}
 					that.m_tpPrimaryDraggedContainer = sender as SelectorItem;
 
 					that.ChangeSelectorItemsVisualState(true);
@@ -291,6 +295,13 @@ namespace Windows.UI.Xaml.Controls
 						list.IndexOf,
 						(oldIndex, newIndex) => DoMove(list, oldIndex, newIndex));
 					break;
+
+				case ICollectionView view when !view.IsReadOnly:
+					ProcessMove(
+						view.Count,
+						view.IndexOf,
+						(oldIndex, newIndex) => DoMove(view, oldIndex, newIndex));
+					break;
 			}
 
 			void ProcessMove(
@@ -383,10 +394,8 @@ namespace Windows.UI.Xaml.Controls
 
 		#region Helpers
 		private static bool IsObservableCollection(object src)
-		{
-			var srcType = src.GetType();
-			return srcType.IsGenericType && srcType.GetGenericTypeDefinition() == typeof(ObservableCollection<>);
-		}
+			=> src.GetType() is { IsGenericType: true } srcType
+				&& srcType.GetGenericTypeDefinition() == typeof(ObservableCollection<>);
 
 		private static void DoMove(ItemCollection items, int oldIndex, int newIndex)
 		{
@@ -417,6 +426,20 @@ namespace Windows.UI.Xaml.Controls
 		}
 
 		private static void DoMove(IList list, int oldIndex, int newIndex)
+		{
+			var item = list[oldIndex];
+			list.RemoveAt(oldIndex);
+			if (newIndex >= list.Count)
+			{
+				list.Add(item);
+			}
+			else
+			{
+				list.Insert(newIndex, item);
+			}
+		}
+
+		private static void DoMove(ICollectionView list, int oldIndex, int newIndex)
 		{
 			var item = list[oldIndex];
 			list.RemoveAt(oldIndex);

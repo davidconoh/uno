@@ -4,15 +4,17 @@ using System.Threading;
 using Uno.Extensions.ApplicationModel.Core;
 using Uno.Foundation.Extensibility;
 using Uno.Foundation.Logging;
+using Uno.UI.Hosting;
 using Uno.UI.Xaml.Core;
+using Uno.WinUI.Runtime.Skia.Linux.FrameBuffer;
 using Uno.WinUI.Runtime.Skia.LinuxFB;
 using Windows.Graphics.Display;
 using Windows.UI.Xaml;
 using WUX = Windows.UI.Xaml;
 
-namespace Uno.UI.Runtime.Skia
+namespace Uno.UI.Runtime.Skia.Linux.FrameBuffer
 {
-	public class FrameBufferHost : ISkiaHost
+	public class FrameBufferHost : ISkiaApplicationHost, IXamlRootHost
 	{
 		[ThreadStatic]
 		private static bool _isDispatcherThread = false;
@@ -30,16 +32,9 @@ namespace Uno.UI.Runtime.Skia
 		/// Creates a host for a Uno Skia FrameBuffer application.
 		/// </summary>
 		/// <param name="appBuilder">App builder.</param>
-		/// <param name="args">Deprecated, value ignored.</param>		
 		/// <remarks>
-		/// Args are obsolete and will be removed in the future. Environment.CommandLine is used instead
-		/// to fill LaunchEventArgs.Arguments.
+		/// Environment.CommandLine is used to fill LaunchEventArgs.Arguments.
 		/// </remarks>
-		[EditorBrowsable(EditorBrowsableState.Never)]
-		public FrameBufferHost(Func<WUX.Application> appBuilder, string[] args) : this(appBuilder)
-		{
-		}
-
 		public FrameBufferHost(Func<WUX.Application> appBuilder)
 		{
 			_appBuilder = appBuilder;
@@ -77,7 +72,7 @@ namespace Uno.UI.Runtime.Skia
 				while (!_coreApplicationExtension!.ExitRequested)
 				{
 					// Read the console keys without showing them on screen.
-					// The keyboard input is handled by libinput. 
+					// The keyboard input is handled by libinput.
 					Console.ReadKey(true);
 				}
 
@@ -95,10 +90,11 @@ namespace Uno.UI.Runtime.Skia
 		{
 			_isDispatcherThread = true;
 
-			ApiExtensibility.Register(typeof(Uno.ApplicationModel.Core.ICoreApplicationExtension), o => _coreApplicationExtension);
-			ApiExtensibility.Register(typeof(Windows.UI.Core.ICoreWindowExtension), o => new CoreWindowExtension(o));
+			ApiExtensibility.Register(typeof(Uno.ApplicationModel.Core.ICoreApplicationExtension), o => _coreApplicationExtension!);
+			ApiExtensibility.Register<IXamlRootHost>(typeof(Windows.UI.Core.IUnoCorePointerInputSource), o => { FrameBufferPointerInputSource.Instance.SetHost(o); return FrameBufferPointerInputSource.Instance; });
+			ApiExtensibility.Register<IXamlRootHost>(typeof(Windows.UI.Core.IUnoKeyboardInputSource), o => { FrameBufferKeyboardInputSource.Instance.SetHost(o); return FrameBufferKeyboardInputSource.Instance; });
+			ApiExtensibility.Register(typeof(Windows.UI.Core.ICoreWindowExtension), o => new CoreWindowExtension());
 			ApiExtensibility.Register(typeof(Windows.UI.ViewManagement.IApplicationViewExtension), o => new ApplicationViewExtension(o));
-			ApiExtensibility.Register<Application>(typeof(Uno.UI.Xaml.IApplicationExtension), o => new ApplicationExtension(o));
 			ApiExtensibility.Register(typeof(Windows.Graphics.Display.IDisplayInformationExtension), o => _displayInformationExtension ??= new DisplayInformationExtension(o, DisplayScale));
 
 			void Dispatch(System.Action d)
@@ -121,13 +117,24 @@ namespace Uno.UI.Runtime.Skia
 						$"DiagonalSizeInInches: {DisplayInformation.GetForCurrentView().DiagonalSizeInInches}, " +
 						$"ScreenInRawPixels: {DisplayInformation.GetForCurrentView().ScreenWidthInRawPixels}x{DisplayInformation.GetForCurrentView().ScreenHeightInRawPixels}");
 				}
+
+				// Force intialization of the DisplayInformation
+				DisplayInformation.GetForCurrentView();
+
+				if (_displayInformationExtension is null)
+				{
+					throw new InvalidOperationException("DisplayInformation is not yet initialized");
+				}
+
+				_displayInformationExtension.Renderer = _renderer;
 			}
 
 			Windows.UI.Core.CoreDispatcher.DispatchOverride = Dispatch;
 			Windows.UI.Core.CoreDispatcher.HasThreadAccessOverride = () => _isDispatcherThread;
 
-			_renderer = new Renderer();
-			_displayInformationExtension!.Renderer = _renderer;
+			FrameBufferInputProvider.Instance.Initialize();
+
+			_renderer = new Renderer(this);
 
 			CoreServices.Instance.ContentRootCoordinator.CoreWindowContentRootSet += OnCoreWindowContentRootSet;
 
@@ -136,19 +143,24 @@ namespace Uno.UI.Runtime.Skia
 
 		private void OnCoreWindowContentRootSet(object? sender, object e)
 		{
-			var xamlRoot = CoreServices.Instance
+			var contentRoot = CoreServices.Instance
 				.ContentRootCoordinator
-				.CoreWindowContentRoot?
-				.GetOrCreateXamlRoot();
+				.CoreWindowContentRoot;
+			var xamlRoot = contentRoot?.GetOrCreateXamlRoot();
 
 			if (xamlRoot is null)
 			{
 				throw new InvalidOperationException("XamlRoot was not properly initialized");
 			}
 
-			xamlRoot.InvalidateRender += _renderer!.InvalidateRender;
+			contentRoot!.SetHost(this);
+			FrameBufferManager.XamlRootMap.Register(xamlRoot, this);
 
 			CoreServices.Instance.ContentRootCoordinator.CoreWindowContentRootSet -= OnCoreWindowContentRootSet;
 		}
+
+		void IXamlRootHost.InvalidateRender() => _renderer?.InvalidateRender();
+
+		WUX.UIElement? IXamlRootHost.RootElement => WUX.Window.Current.RootElement;
 	}
 }

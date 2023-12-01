@@ -1,4 +1,5 @@
-﻿using System;
+﻿#nullable enable
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
@@ -27,12 +28,13 @@ namespace Windows.UI.Xaml.Media;
 public partial class ImageSource
 {
 	private readonly bool _isOriginalSourceUIImage;
+	private static readonly IEventProvider _trace = Tracing.Get(TraceProvider.Id);
 
 	partial void InitFromResource(Uri uri)
 	{
 		var path = uri
 			.PathAndQuery
-			.TrimStart(new[] { '/' })
+			.TrimStart('/')
 
 			// UWP supports backward slash in path for directory separators.
 			.Replace("\\", "/");
@@ -101,21 +103,14 @@ public partial class ImageSource
 	{
 		var image = OpenBundleFromString(BundleName) ?? OpenBundleFromString(BundlePath);
 
-		if (image is not null)
+		if (image is null)
 		{
-			_imageData = ImageData.FromNative(image);
-		}
-		else
-		{
-			_imageData = ImageData.Empty;
+			this.Log().ErrorFormat("Unable to locate bundle resource [{0}]", BundleName ?? BundlePath ?? "");
+
+			return _imageData = ImageData.Empty;
 		}
 
-		if (!_imageData.HasData)
-		{
-			this.Log().ErrorFormat("Unable to locate bundle resource [{0}]", BundleName ?? BundlePath);
-		}
-
-		return _imageData;
+		return _imageData = ImageData.FromNative(image);
 	}
 
 	/// <summary>
@@ -127,8 +122,8 @@ public partial class ImageSource
 	/// Override to provide the capability of concrete ImageSource to open synchronously.
 	/// </summary>
 	/// <param name="image">Returned image data.</param>
-	/// <returns>True if opening synchronosly is possible.</returns>
-	private protected virtual bool TryOpenSourceSync([NotNullWhen(true)] out ImageData image)
+	/// <returns>True if opening synchronously is possible.</returns>
+	private protected virtual bool TryOpenSourceSync(int? targetWidth, int? targetHeight, out ImageData image)
 	{
 		image = default;
 		return false;
@@ -137,9 +132,15 @@ public partial class ImageSource
 	/// <summary>
 	/// Override to provide the capability of concrete ImageSource to open asynchronously.
 	/// </summary>
-	/// <param name="image">Async task for image data retrieval.</param>
-	/// <returns>True if opening synchronosly is possible.</returns>
-	private protected virtual bool TryOpenSourceAsync(CancellationToken ct, [NotNullWhen(true)] out Task<ImageData> asyncImage)
+	/// <param name="targetWidth">The width of the image that will render this ImageSource.</param>
+	/// <param name="targetHeight">The width of the image that will render this ImageSource.</param>
+	/// <param name="asyncImage">Async task for image data retrieval.</param>
+	/// <returns>True if opening asynchronously is possible.</returns>
+	/// <remarks>
+	/// <paramref name="targetWidth"/> and <paramref name="targetHeight"/> can be used to improve performance by fetching / decoding only the required size.
+	/// Depending on stretching, only one of each can be provided.
+	/// </remarks>
+	private protected virtual bool TryOpenSourceAsync(CancellationToken ct, int? targetWidth, int? targetHeight, [NotNullWhen(true)] out Task<ImageData>? asyncImage)
 	{
 		asyncImage = default;
 		return false;
@@ -161,7 +162,7 @@ public partial class ImageSource
 			return true;
 		}
 
-		if (IsSourceReady && TryOpenSourceSync(out image))
+		if (IsSourceReady && TryOpenSourceSync(null, null, out image))
 		{
 			return true;
 		}
@@ -185,12 +186,12 @@ public partial class ImageSource
 				return ImageData.Empty;
 			}
 
-			if (IsSourceReady && TryOpenSourceSync(out var img))
+			if (IsSourceReady && TryOpenSourceSync(null, null, out var img))
 			{
 				return _imageData = img;
 			}
 
-			if (IsSourceReady && TryOpenSourceAsync(ct, out var asyncImg))
+			if (IsSourceReady && TryOpenSourceAsync(ct, null, null, out var asyncImg))
 			{
 				return _imageData = await asyncImg;
 			}

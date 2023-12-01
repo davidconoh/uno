@@ -9,13 +9,22 @@ namespace Windows.UI.Xaml.Controls
 {
 	partial class CalendarViewBaseItem
 	{
-		private readonly BorderLayerRenderer _borderRenderer = new BorderLayerRenderer();
+#if __ANDROID__ || __IOS__ || __SKIA__ || __WASM__ || __MACOS__
+		private BorderLayerRenderer _borderRenderer;
+#endif
+
 		private Size _lastSize;
 
 		private void Uno_InvalidateRender()
 		{
 			_lastSize = default;
 			InvalidateArrange();
+#if __WASM__
+			if (this.GetTemplateRoot() is UIElement templateRoot)
+			{
+				templateRoot.InvalidateArrange();
+			}
+#endif
 		}
 
 		private void Uno_MeasureChrome(Size availableSize)
@@ -92,8 +101,26 @@ namespace Windows.UI.Xaml.Controls
 				borderBrush = selectedBrush;
 			}
 
-			_borderRenderer.UpdateLayer(this, background, BackgroundSizing.InnerBorderEdge, borderThickness, borderBrush, cornerRadius, default);
+#if __WASM__
+			if (borderBrush is not null)
+			{
+				EffectiveBorderThickness = borderThickness;
+			}
+			else
+			{
+				EffectiveBorderThickness = default;
+			}
+#endif
+
+#if __ANDROID__ || __IOS__ || __SKIA__ || __WASM__ || __MACOS__
+			_borderRenderer?.UpdateLayer(this, background, BackgroundSizing.InnerBorderEdge, borderThickness, borderBrush, cornerRadius, default);
+#endif
 		}
+
+
+#if __WASM__
+		internal Thickness EffectiveBorderThickness { get; set; }
+#endif
 
 		private bool IsClear(Brush brush)
 			=> brush is null

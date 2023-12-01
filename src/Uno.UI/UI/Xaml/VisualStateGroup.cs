@@ -16,7 +16,7 @@ using Windows.Foundation.Collections;
 
 using static Windows.UI.Xaml.Media.Animation.Timeline.TimelineState;
 
-#if XAMARIN_IOS
+#if __IOS__
 using UIKit;
 #elif __MACOS__
 using AppKit;
@@ -193,18 +193,14 @@ namespace Windows.UI.Xaml
 			// we ensure that this materialization occurs only in the right resource scope.
 			// Note: the "current" should have already been materialized.
 			(Storyboard transition, Storyboard animation, SetterBaseCollection setters) current, target;
-#if !HAS_EXPENSIVE_TRYFINALLY
 			try
-#endif
 			{
 				ResourceResolver.PushNewScope(_xamlScope);
 
 				current = (currentValues.transition?.Storyboard, currentValues.state?.Storyboard, currentValues.state?.Setters);
 				target = (targetValues.transition?.Storyboard, targetValues.state?.Storyboard, targetValues.state?.Setters);
 			}
-#if !HAS_EXPENSIVE_TRYFINALLY
 			finally
-#endif
 			{
 				ResourceResolver.PopScope();
 			}
@@ -321,9 +317,7 @@ namespace Windows.UI.Xaml
 					return;
 				}
 
-#if !HAS_EXPENSIVE_TRYFINALLY
 				try
-#endif
 				{
 					// Setter.ApplyValue can resolve some theme resources.
 					// We need to invoke them using the right resource context.
@@ -336,11 +330,11 @@ namespace Windows.UI.Xaml
 					while (settersEnumerator.MoveNext())
 					{
 						settersEnumerator.Current.ApplyValue(DependencyPropertyValuePrecedences.Animations, element);
+
+
 					}
 				}
-#if !HAS_EXPENSIVE_TRYFINALLY
 				finally
-#endif
 				{
 					ResourceResolver.PopScope();
 				}
@@ -357,25 +351,39 @@ namespace Windows.UI.Xaml
 			var hasOld = !oldStateName.IsNullOrEmpty();
 			var hasNew = !newStateName.IsNullOrEmpty();
 
-			if (hasOld && hasNew && Transitions.FirstOrDefault(Match(oldStateName, newStateName)) is { } perfectMatch)
+			if (hasOld && hasNew && GetFirstMatch(oldStateName, newStateName) is { } perfectMatch)
 			{
 				return perfectMatch;
 			}
 
-			if (hasOld && Transitions.FirstOrDefault(Match(oldStateName, null)) is { } fromMatch)
+			if (hasOld && GetFirstMatch(oldStateName, null) is { } fromMatch)
 			{
 				return fromMatch;
 			}
 
-			if (hasNew && Transitions.FirstOrDefault(Match(null, newStateName)) is { } newMatch)
+			if (hasNew && GetFirstMatch(null, newStateName) is { } newMatch)
 			{
 				return newMatch;
 			}
 
 			return default;
 
-			Func<VisualTransition, bool> Match(string from, string to)
-				=> tr => string.Equals(tr.From, oldStateName) && string.Equals(tr.To, newStateName);
+			VisualTransition GetFirstMatch(string from, string to)
+			{
+				// Avoid using Transitions.FirstOrDefault as it incurs unnecessary Func<VisualTransition, bool> allocations.
+				foreach (var transition in Transitions)
+				{
+					if (Match(transition, from, to))
+					{
+						return transition;
+					}
+				}
+
+				return null;
+			}
+
+			bool Match(VisualTransition transition, string from, string to)
+				=> string.Equals(transition.From, oldStateName) && string.Equals(transition.To, newStateName);
 		}
 
 		internal void RefreshStateTriggers(bool force = false)

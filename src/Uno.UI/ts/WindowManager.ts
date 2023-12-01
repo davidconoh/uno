@@ -6,17 +6,7 @@ namespace Uno.UI {
 	export class WindowManager {
 
 		public static current: WindowManager;
-		private static _isHosted: boolean = false;
 		private static _isLoadEventsEnabled: boolean = false;
-
-		/**
-		 * Defines if the WindowManager is running in hosted mode, and should skip the
-		 * initialization of WebAssembly, use this mode in conjunction with the Uno.UI.WpfHost
-		 * to improve debuggability.
-		 */
-		public static get isHosted(): boolean {
-			return WindowManager._isHosted;
-		}
 
 		/**
 		 * Defines if the WindowManager is responsible to raise the loading, loaded and unloaded events,
@@ -29,29 +19,27 @@ namespace Uno.UI {
 		private static readonly unoRootClassName = "uno-root-element";
 		private static readonly unoUnarrangedClassName = "uno-unarranged";
 		private static readonly unoCollapsedClassName = "uno-visibility-collapsed";
-
-		private static _cctor = (() => {
-			WindowManager.initMethods();
-			HtmlDom.initPolyfills();
-		})();
+		private static readonly unoPersistentLoaderClassName = "uno-persistent-loader";
+		private static readonly unoKeepLoaderClassName = "uno-keep-loader";
 
 		/**
 			* Initialize the WindowManager
 			* @param containerElementId The ID of the container element for the Xaml UI
 			* @param loadingElementId The ID of the loading element to remove once ready
 			*/
-		public static init(isHosted: boolean, isLoadEventsEnabled: boolean, containerElementId: string = "uno-body", loadingElementId: string = "uno-loading"): string {
+		public static async init(isLoadEventsEnabled: boolean, containerElementId: string = "uno-body", loadingElementId: string = "uno-loading") {
 
-			WindowManager._isHosted = isHosted;
+			HtmlDom.initPolyfills();
+
+			await WindowManager.initMethods();
+
 			WindowManager._isLoadEventsEnabled = isLoadEventsEnabled;
 
-			Windows.UI.Core.CoreDispatcher.init(WindowManager.buildReadyPromise());
+			Uno.UI.Dispatching.NativeDispatcher.init(WindowManager.buildReadyPromise());
 
 			this.current = new WindowManager(containerElementId, loadingElementId);
 			MonoSupport.jsCallDispatcher.registerScope("Uno", this.current);
 			this.current.init();
-
-			return "ok";
 		}
 
 		/**
@@ -61,7 +49,7 @@ namespace Uno.UI {
 		private static buildReadyPromise(): Promise<boolean> {
 			return new Promise<boolean>(resolve => {
 				Promise.all(
-					[WindowManager.buildSplashScreen(), ExportManager.initialize()]
+					[WindowManager.buildSplashScreen()]
 				).then(() => resolve(true))
 			});
 		}
@@ -71,78 +59,75 @@ namespace Uno.UI {
 		 * */
 		private static buildSplashScreen(): Promise<boolean> {
 			return new Promise<boolean>(resolve => {
-				const img = new Image();
-				let loaded = false;
 
-				let loadingDone = () => {
-					if (!loaded) {
-						loaded = true;
-						if (img.width !== 0 && img.height !== 0) {
-							// Materialize the image content so it shows immediately
-							// even if the dispatcher is blocked thereafter by all
-							// the Uno initialization work. The resulting canvas is not used.
-							//
-							// If the image fails to load, setup the splashScreen anyways with the
-							// proper sample.
-							let canvas = document.createElement("canvas");
-							canvas.width = img.width;
-							canvas.height = img.height;
-							let ctx = canvas.getContext("2d");
-							ctx.drawImage(img, 0, 0);
-						}
+				let bootstrapperLoaders = document.getElementsByClassName(WindowManager.unoPersistentLoaderClassName);
+				if (bootstrapperLoaders.length > 0) {
+					// Bootstrapper supports persistent loader, skip creating local one and keep it displayed
+					let bootstrapperLoader = bootstrapperLoaders[0] as HTMLElement;
+					bootstrapperLoader.classList.add(WindowManager.unoKeepLoaderClassName);
 
-						if (document.readyState === "loading") {
-							document.addEventListener("DOMContentLoaded", () => {
+					resolve(true);
+				}
+				else {
+					const img = new Image();
+					let loaded = false;
+
+					let loadingDone = () => {
+						if (!loaded) {
+							loaded = true;
+							if (img.width !== 0 && img.height !== 0) {
+								// Materialize the image content so it shows immediately
+								// even if the dispatcher is blocked thereafter by all
+								// the Uno initialization work. The resulting canvas is not used.
+								//
+								// If the image fails to load, setup the splashScreen anyways with the
+								// proper sample.
+								let canvas = document.createElement("canvas");
+								canvas.width = img.width;
+								canvas.height = img.height;
+								let ctx = canvas.getContext("2d");
+								ctx.drawImage(img, 0, 0);
+							}
+
+							if (document.readyState === "loading") {
+								document.addEventListener("DOMContentLoaded", () => {
+									WindowManager.setupSplashScreen(img);
+									resolve(true);
+								});
+							} else {
 								WindowManager.setupSplashScreen(img);
 								resolve(true);
-							});
-						} else {
-							WindowManager.setupSplashScreen(img);
-							resolve(true);
+							}
 						}
+					};
+
+					// Preload the splash screen so the image element
+					// created later on 
+					img.onload = loadingDone;
+					img.onerror = loadingDone;
+
+					const UNO_BOOTSTRAP_APP_BASE = config.environmentVariables["UNO_BOOTSTRAP_APP_BASE"] || "";
+					const UNO_BOOTSTRAP_WEBAPP_BASE_PATH = config.environmentVariables["UNO_BOOTSTRAP_WEBAPP_BASE_PATH"] || "";
+
+					let fullImagePath = String(UnoAppManifest.splashScreenImage);
+
+					// If the splashScreenImage image already points to the app base path, use it, otherwise we build it.
+					if (UNO_BOOTSTRAP_APP_BASE !== "" && fullImagePath.indexOf(UNO_BOOTSTRAP_APP_BASE) == -1) {
+						fullImagePath = `${UNO_BOOTSTRAP_WEBAPP_BASE_PATH}${UNO_BOOTSTRAP_APP_BASE}/${UnoAppManifest.splashScreenImage}`;
 					}
-				};
 
-				// Preload the splash screen so the image element
-				// created later on 
-				img.onload = loadingDone;
-				img.onerror = loadingDone;
+					img.src = fullImagePath;
 
-				const UNO_BOOTSTRAP_APP_BASE = config.environmentVariables["UNO_BOOTSTRAP_APP_BASE"] || "";
-				const UNO_BOOTSTRAP_WEBAPP_BASE_PATH = config.environmentVariables["UNO_BOOTSTRAP_WEBAPP_BASE_PATH"] || "";
-
-				let fullImagePath = String(UnoAppManifest.splashScreenImage);
-
-				// If the splashScreenImage image already points to the app base path, use it, otherwise we build it.
-				if (UNO_BOOTSTRAP_APP_BASE !== "" && fullImagePath.indexOf(UNO_BOOTSTRAP_APP_BASE) == -1) {
-					fullImagePath = `${UNO_BOOTSTRAP_WEBAPP_BASE_PATH}${UNO_BOOTSTRAP_APP_BASE}/${UnoAppManifest.splashScreenImage}`;
+					// If there's no response, skip the loading
+					setTimeout(loadingDone, 2000);
 				}
-
-				img.src = fullImagePath;
-
-				// If there's no response, skip the loading
-				setTimeout(loadingDone, 2000);
 			});
-		}
-
-		/**
-			* Initialize the WindowManager
-			* @param containerElementId The ID of the container element for the Xaml UI
-			* @param loadingElementId The ID of the loading element to remove once ready
-			*/
-		public static initNative(pParams: number): boolean {
-
-			const params = WindowManagerInitParams.unmarshal(pParams);
-
-			WindowManager.init(params.IsHostedMode, params.IsLoadEventsEnabled);
-
-			return true;
 		}
 
 		private containerElement: HTMLDivElement;
 		private rootElement: HTMLElement;
 
-		private cursorStyleElement: HTMLElement;
+		private cursorStyleRule: CSSStyleRule;
 
 		private allActiveElementsById: { [id: string]: HTMLElement | SVGElement } = {};
 		private uiElementRegistrations: {
@@ -172,21 +157,21 @@ namespace Uno.UI {
 
 			if (UnoAppManifest && UnoAppManifest.splashScreenImage) {
 
-				const loading = document.getElementById("loading");
-
-				if (loading) {
-					loading.remove();
-				}
-
 				const unoBody = document.getElementById("uno-body");
 
 				if (unoBody) {
 					const unoLoading = document.createElement("div");
 					unoLoading.id = "uno-loading";
 
-					if (UnoAppManifest.splashScreenColor) {
-						const body = document.getElementsByTagName("body")[0];
-						body.style.backgroundColor = UnoAppManifest.splashScreenColor;
+					if (UnoAppManifest.lightThemeBackgroundColor) {
+						unoLoading.style.setProperty("--light-theme-bg-color", UnoAppManifest.lightThemeBackgroundColor);
+					}
+					if (UnoAppManifest.darkThemeBackgroundColor) {
+						unoLoading.style.setProperty("--dark-theme-bg-color", UnoAppManifest.darkThemeBackgroundColor);
+					}
+
+					if (UnoAppManifest.splashScreenColor && UnoAppManifest.splashScreenColor != 'transparent') {
+						unoLoading.style.backgroundColor = UnoAppManifest.splashScreenColor;
 					}
 
 					splashImage.id = "uno-loading-splash";
@@ -196,6 +181,12 @@ namespace Uno.UI {
 
 					unoBody.appendChild(unoLoading);
 				}
+
+				const loading = document.getElementById("loading");
+
+				if (loading) {
+					loading.remove();
+				}
 			}
 		}
 
@@ -203,7 +194,9 @@ namespace Uno.UI {
 			* Reads the window's search parameters
 			* 
 			*/
-		static findLaunchArguments(): string {
+		static beforeLaunch(): string {
+			WindowManager.resize();
+
 			if (typeof URLSearchParams === "function") {
 				return new URLSearchParams(window.location.search).toString();
 			}
@@ -219,14 +212,10 @@ namespace Uno.UI {
 		}
 
 		/**
-			* Create a html DOM element representing a Xaml element.
-			*
-			* You need to call addView to connect it to the DOM.
+			* Estimated application startup time
 			*/
-		public createContent(contentDefinition: IContentDefinition): string {
-			this.createContentInternal(contentDefinition);
-
-			return "ok";
+		public static getBootTime(): number {
+			return Date.now() - performance.now();
 		}
 
 		/**
@@ -347,16 +336,6 @@ namespace Uno.UI {
 			*
 			* This is mostly for diagnostic purposes.
 			*/
-		public setName(elementId: number, name: string): string {
-			this.setNameInternal(elementId, name);
-			return "ok";
-		}
-
-		/**
-			* Set a name for an element.
-			*
-			* This is mostly for diagnostic purposes.
-			*/
 		public setNameNative(pParam: number): boolean {
 			const params = WindowManagerSetNameParams.unmarshal(pParam);
 			this.setNameInternal(params.HtmlId, params.Name);
@@ -365,17 +344,6 @@ namespace Uno.UI {
 
 		private setNameInternal(elementId: number, name: string): void {
 			this.getView(elementId).setAttribute("xamlname", name);
-		}
-
-
-		/**
-			* Set a name for an element.
-			*
-			* This is mostly for diagnostic purposes.
-			*/
-		public setXUid(elementId: number, name: string): string {
-			this.setXUidInternal(elementId, name);
-			return "ok";
 		}
 
 		/**
@@ -391,14 +359,6 @@ namespace Uno.UI {
 
 		private setXUidInternal(elementId: number, name: string): void {
 			this.getView(elementId).setAttribute("xuid", name);
-		}
-
-		/**
-			* Sets the visibility of the specified element
-			*/
-		public setVisibility(elementId: number, visible: boolean): string {
-			this.setVisibilityInternal(elementId, visible);
-			return "ok";
 		}
 
 		public setVisibilityNative(pParam: number): boolean {
@@ -421,21 +381,6 @@ namespace Uno.UI {
 			else {
 				element.classList.add(WindowManager.unoCollapsedClassName);
 			}
-		}
-
-		/**
-			* Set an attribute for an element.
-			*/
-		public setAttributes(elementId: number, attributes: { [name: string]: string }): string {
-			const element = this.getView(elementId);
-
-			for (const name in attributes) {
-				if (attributes.hasOwnProperty(name)) {
-					element.setAttribute(name, attributes[name]);
-				}
-			}
-
-			return "ok";
 		}
 
 		/**
@@ -479,16 +424,6 @@ namespace Uno.UI {
 		/**
 			* Removes an attribute for an element.
 			*/
-		public removeAttribute(elementId: number, name: string): string {
-			const element = this.getView(elementId);
-			element.removeAttribute(name);
-
-			return "ok";
-		}
-
-		/**
-			* Removes an attribute for an element.
-			*/
 		public removeAttributeNative(pParams: number): boolean {
 
 			const params = WindowManagerRemoveAttributeParams.unmarshal(pParams);
@@ -501,33 +436,9 @@ namespace Uno.UI {
 		/**
 			* Get an attribute for an element.
 			*/
-		public getAttribute(elementId: number, name: string): any {
+		public getAttribute(elementId: number, name: string): string {
 
 			return this.getView(elementId).getAttribute(name);
-		}
-
-		/**
-			* Set a property for an element.
-			*/
-		public setProperty(elementId: number, properties: { [name: string]: string }): string {
-			const element = this.getView(elementId);
-
-			for (const name in properties) {
-				if (properties.hasOwnProperty(name)) {
-					const setVal = properties[name];
-					if (setVal === "true") {
-						(element as any)[name] = true;
-					}
-					else if (setVal === "false") {
-						(element as any)[name] = false;
-					}
-					else {
-						(element as any)[name] = setVal;
-					}
-				}
-			}
-
-			return "ok";
 		}
 
 		/**
@@ -564,31 +475,36 @@ namespace Uno.UI {
 			}
 		}
 
-		/**
-			* Get a property for an element.
-			*/
-		public getProperty(elementId: number, name: string): any {
-			const element = this.getView(elementId);
+		public setSinglePropertyNative(pParams: number): boolean {
 
-			return (element as any)[name] || "";
+			const params = WindowManagerSetSinglePropertyParams.unmarshal(pParams);
+
+			this.setSinglePropertyNativeFast(params.HtmlId, params.Name, params.Value);
+
+			return true;
+		}
+
+		public setSinglePropertyNativeFast(htmlId: number, name: string, value: string) {
+
+			const element = this.getView(htmlId);
+			if (value === "true") {
+				(element as any)[name] = true;
+			}
+			else if (value === "false") {
+				(element as any)[name] = false;
+			}
+			else {
+				(element as any)[name] = value;
+			}
 		}
 
 		/**
-			* Set the CSS style of a html element.
-			*
-			* To remove a value, set it to empty string.
-			* @param styles A dictionary of styles to apply on html element.
+			* Get a property for an element.
 			*/
-		public setStyle(elementId: number, styles: { [name: string]: string }): string {
-			const element = this.getView(elementId);
+		public getProperty(elementId: number, name: string): string {
+			const element = <any>this.getView(elementId);
 
-			for (const style in styles) {
-				if (styles.hasOwnProperty(style)) {
-					element.style.setProperty(style, styles[style]);
-				}
-			}
-
-			return "ok";
+			return (element[name] || "").toString();
 		}
 
 		/**
@@ -640,13 +556,6 @@ namespace Uno.UI {
 			return true;
 		}
 
-		public setStyleString(htmlId: number, name: string, value: string): string {
-
-			this.getView(htmlId).style.setProperty(name, value);
-
-			return "ok";
-		}
-
 		public setStyleStringNative(pParams: number): boolean {
 
 			const params = WindowManagerSetStyleStringParams.unmarshal(pParams);
@@ -659,22 +568,6 @@ namespace Uno.UI {
 		public setStyleStringNativeFast(htmlId: number, name: string, value: string) {
 
 			this.getView(htmlId).style.setProperty(name, value);
-		}
-
-		public setArrangeProperties(elementId: number): string {
-			const element = this.getView(elementId);
-
-			this.setAsArranged(element);
-
-			return "ok";
-		}
-
-		/**
-			* Remove the CSS style of a html element.
-			*/
-		public resetStyle(elementId: number, names: string[]): string {
-			this.resetStyleInternal(elementId, names);
-			return "ok";
 		}
 
 		/**
@@ -692,10 +585,6 @@ namespace Uno.UI {
 			for (const name of names) {
 				element.style.setProperty(name, "");
 			}
-		}
-
-		public isCssPropertySupported(propertyName: string, value: string): boolean {
-			return CSS.supports(propertyName, value);
 		}
 
 		public isCssConditionSupported(supportCondition: string): boolean {
@@ -820,11 +709,6 @@ namespace Uno.UI {
 		/**
 		* Sets the color property of the specified element
 		*/
-		public setElementColor(elementId: number, color: number): string {
-			this.setElementColorInternal(elementId, color);
-			return "ok";
-		}
-
 		public setElementColorNative(pParam: number): boolean {
 			const params = WindowManagerSetElementColorParams.unmarshal(pParam);
 			this.setElementColorInternal(params.HtmlId, params.Color);
@@ -857,11 +741,6 @@ namespace Uno.UI {
 		/**
 		* Sets the fill property of the specified element
 		*/
-		public setElementFill(elementId: number, color: number): string {
-			this.setElementColorInternal(elementId, color);
-			return "ok";
-		}
-
 		public setElementFillNative(pParam: number): boolean {
 			const params = WindowManagerSetElementFillParams.unmarshal(pParam);
 			this.setElementFillInternal(params.HtmlId, params.Color);
@@ -1008,22 +887,6 @@ namespace Uno.UI {
 			* Add an event handler to a html element.
 			*
 			* @param eventName The name of the event
-			* @param onCapturePhase true means "on trickle down" (going down to target), false means "on bubble up" (bubbling back to ancestors). Default is false.
-			*/
-		public registerEventOnView(
-			elementId: number,
-			eventName: string,
-			onCapturePhase: boolean = false,
-			eventExtractorId: number
-		): string {
-			this.registerEventOnViewInternal(elementId, eventName, onCapturePhase, eventExtractorId);
-			return "ok";
-		}
-
-		/**
-			* Add an event handler to a html element.
-			*
-			* @param eventName The name of the event
 			* @param onCapturePhase true means "on trickle down", false means "on bubble up". Default is false.
 			*/
 		public registerEventOnViewNative(pParams: number): boolean {
@@ -1057,7 +920,7 @@ namespace Uno.UI {
 					? `${eventExtractor(event)}`
 					: "";
 
-				const result = this.dispatchEvent(element, eventName, eventPayload);
+				const result = this.dispatchEvent(element, eventName, eventPayload, onCapturePhase);
 				if (result & HtmlEventDispatchResult.StopPropagation) {
 					event.stopPropagation();
 				}
@@ -1160,7 +1023,7 @@ namespace Uno.UI {
 		/**
 			* Set or replace the root element.
 			*/
-		public setRootElement(elementId?: number): string {
+		public setRootElement(elementId?: number): void {
 			if (this.rootElement && Number(this.rootElement.id) === elementId) {
 				return null; // nothing to do
 			}
@@ -1195,22 +1058,6 @@ namespace Uno.UI {
 				this.dispatchEvent(this.rootElement, "loaded");
 			}
 			this.setAsArranged(newRootElement); // patch because root is not measured/arranged
-
-			this.resize();
-
-			return "ok";
-		}
-
-		/**
-			* Set a view as a child of another one.
-			*
-			* "Loading" & "Loaded" events will be raised if necessary.
-			*
-			* @param index Position in children list. Appended at end if not specified.
-			*/
-		public addView(parentId: number, childId: number, index?: number): string {
-			this.addViewInternal(parentId, childId, index);
-			return "ok";
 		}
 
 		/**
@@ -1264,16 +1111,6 @@ namespace Uno.UI {
 			*
 			* "Unloading" & "Unloaded" events will be raised if necessary.
 			*/
-		public removeView(parentId: number, childId: number): string {
-			this.removeViewInternal(parentId, childId);
-			return "ok";
-		}
-
-		/**
-			* Remove a child from a parent element.
-			*
-			* "Unloading" & "Unloaded" events will be raised if necessary.
-			*/
 		public removeViewNative(pParams: number): boolean {
 			const params = WindowManagerRemoveViewParams.unmarshal(pParams);
 			this.removeViewInternal(params.HtmlId, params.ChildView);
@@ -1304,17 +1141,6 @@ namespace Uno.UI {
 			* The element won't be available anymore. Usually indicate the managed
 			* version has been scavenged by the GC.
 			*/
-		public destroyView(elementId: number): string {
-			this.destroyViewInternal(elementId);
-			return "ok";
-		}
-
-		/**
-			* Destroy a html element.
-			*
-			* The element won't be available anymore. Usually indicate the managed
-			* version has been scavenged by the GC.
-			*/
 		public destroyViewNative(pParams: number): boolean {
 			const params = WindowManagerDestroyViewParams.unmarshal(pParams);
 			this.destroyViewInternal(params.HtmlId);
@@ -1334,18 +1160,6 @@ namespace Uno.UI {
 			}
 
 			delete this.allActiveElementsById[elementId];
-		}
-
-		public getBoundingClientRect(elementId: number): string {
-
-			const bounds = (<any>this.getView(elementId)).getBoundingClientRect();
-			return `${bounds.left};${bounds.top};${bounds.right - bounds.left};${bounds.bottom - bounds.top}`;
-		}
-
-		public getBBox(elementId: number): string {
-			const bbox = this.getBBoxInternal(elementId);
-
-			return `${bbox.x};${bbox.y};${bbox.width};${bbox.height}`;
 		}
 
 		public getBBoxNative(pParams: number, pReturn: number): boolean {
@@ -1411,20 +1225,6 @@ namespace Uno.UI {
 			element.height.baseVal.value = params.Height;
 
 			return true;
-		}
-
-		/**
-			* Use the Html engine to measure the element using specified constraints.
-			*
-			* @param maxWidth string containing width in pixels. Empty string means infinite.
-			* @param maxHeight string containing height in pixels. Empty string means infinite.
-			* @param measureContent if we're interested by the content of the control (<img>'s image, <input>'s text...)
-			*/
-		public measureView(viewId: string, maxWidth: string, maxHeight: string, measureContent: boolean = true): string {
-
-			const ret = this.measureViewInternal(Number(viewId), maxWidth ? Number(maxWidth) : NaN, maxHeight ? Number(maxHeight) : NaN, measureContent);
-
-			return `${ret[0]};${ret[1]}`;
 		}
 
 		/**
@@ -1665,7 +1465,7 @@ namespace Uno.UI {
 		 * @param url the source image
 		 * @param color the color to apply to the monochrome pixels
 		 */
-		public setImageAsMonochrome(viewId: number, url: string, color: string): string {
+		public setImageAsMonochrome(viewId: number, url: string, color: string): void {
 			const element = this.getView(viewId);
 
 			if (element.tagName.toUpperCase() === "IMG") {
@@ -1692,27 +1492,27 @@ namespace Uno.UI {
 
 					imgElement.src = c.toDataURL();
 				}
-
-				return "ok";
 			}
 			else {
 				throw `setImageAsMonochrome: Element id ${viewId} is not an Img.`;
 			}
 		}
 
-		public setPointerCapture(viewId: number, pointerId: number): string {
+		public setCornerRadius(viewId: number, topLeftX: number, topLeftY: number, topRightX: number, topRightY: number, bottomRightX: number, bottomRightY: number, bottomLeftX: number, bottomLeftY: number) {
+			const element = this.getView(viewId);
+			element.style.borderRadius = `${topLeftX}px ${topRightX}px ${bottomRightX}px ${bottomLeftX}px / ${topLeftY}px ${topRightY}px ${bottomRightY}px ${bottomLeftY}px`;
+			element.style.overflow = "hidden"; // overflow: hidden is required here because the clipping can't do its job when it's non-rectangular.
+		}
+
+		public setPointerCapture(viewId: number, pointerId: number): void {
 			this.getView(viewId).setPointerCapture(pointerId);
-
-			return "ok";
 		}
 
-		public releasePointerCapture(viewId: number, pointerId: number): string {
+		public releasePointerCapture(viewId: number, pointerId: number): void {
 			this.getView(viewId).releasePointerCapture(pointerId);
-
-			return "ok";
 		}
 
-		public focusView(elementId: number): string {
+		public focusView(elementId: number): void {
 			const element = this.getView(elementId);
 
 			if (!(element instanceof HTMLElement)) {
@@ -1720,19 +1520,6 @@ namespace Uno.UI {
 			}
 
 			element.focus();
-
-			return "ok";
-		}
-
-		/**
-			* Set the Html content for an element.
-			*
-			* Those html elements won't be available as XamlElement in managed code.
-			* WARNING: you should avoid mixing this and `addView` for the same element.
-			*/
-		public setHtmlContent(viewId: number, html: string): string {
-			this.setHtmlContentInternal(viewId, html);
-			return "ok";
 		}
 
 		/**
@@ -1751,18 +1538,6 @@ namespace Uno.UI {
 		private setHtmlContentInternal(viewId: number, html: string): void {
 
 			this.getView(viewId).innerHTML = html;
-		}
-
-		/**
-		 * Gets the Client and Offset size of the specified element
-		 *
-		 * This method is used to determine the size of the scroll bars, to
-		 * mask the events coming from that zone.
-		 */
-		public getClientViewSize(elementId: number): string {
-			const element = this.getView(elementId) as HTMLElement;
-
-			return `${element.clientWidth};${element.clientHeight};${element.offsetWidth};${element.offsetHeight}`;
 		}
 
 		/**
@@ -1794,7 +1569,11 @@ namespace Uno.UI {
 		 */
 		public GetDependencyPropertyValue(elementId: number, propertyName: string): string {
 			if (!WindowManager.getDependencyPropertyValueMethod) {
-				WindowManager.getDependencyPropertyValueMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Uno.UI.Helpers.Automation:GetDependencyPropertyValue");
+				if ((<any>globalThis).DotnetExports !== undefined) {
+					WindowManager.getDependencyPropertyValueMethod = (<any>globalThis).DotnetExports.UnoUI.Uno.UI.Helpers.Automation.GetDependencyPropertyValue;
+				} else {
+					WindowManager.getDependencyPropertyValueMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Uno.UI.Helpers.Automation:GetDependencyPropertyValue");
+				}
 			}
 
 			const element = this.getView(elementId) as HTMLElement;
@@ -1810,7 +1589,11 @@ namespace Uno.UI {
 		 */
 		public SetDependencyPropertyValue(elementId: number, propertyNameAndValue: string): string {
 			if (!WindowManager.setDependencyPropertyValueMethod) {
-				WindowManager.setDependencyPropertyValueMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Uno.UI.Helpers.Automation:SetDependencyPropertyValue");
+				if ((<any>globalThis).DotnetExports !== undefined) {
+					WindowManager.setDependencyPropertyValueMethod = (<any>globalThis).DotnetExports.UnoUI.Uno.UI.Helpers.Automation.SetDependencyPropertyValue;
+				} else {
+					WindowManager.setDependencyPropertyValueMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Uno.UI.Helpers.Automation:SetDependencyPropertyValue");
+				}
 			}
 
 			const element = this.getView(elementId) as HTMLElement;
@@ -1824,9 +1607,8 @@ namespace Uno.UI {
 			*
 			* In a future version it will also handle the splashscreen.
 			*/
-		public activate(): string {
+		public activate(): void {
 			this.removeLoading();
-			return "ok";
 		}
 
 		private init() {
@@ -1841,11 +1623,18 @@ namespace Uno.UI {
 			);
 		}
 
-		private static initMethods() {
-			if (WindowManager.isHosted) {
-				console.debug("Hosted Mode: Skipping MonoRuntime initialization ");
-			}
-			else {
+		private static async initMethods() {
+
+			await ExportManager.initialize();
+
+			if ((<any>globalThis).DotnetExports !== undefined) {
+				const exports = (<any>globalThis).DotnetExports.UnoUI;
+
+				WindowManager.resizeMethod = exports.Windows.UI.Xaml.Window.Resize;
+				WindowManager.dispatchEventMethod = exports.Windows.UI.Xaml.UIElement.DispatchEvent;
+				WindowManager.focusInMethod = exports.Windows.UI.Xaml.Input.FocusManager.ReceiveFocusNative;
+				WindowManager.dispatchSuspendingMethod = exports.Windows.UI.Xaml.Application.DispatchSuspending;
+			} else {
 				if (!WindowManager.resizeMethod) {
 					WindowManager.resizeMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Windows.UI.Xaml.Window:Resize");
 				}
@@ -1873,7 +1662,7 @@ namespace Uno.UI {
 			document.body.addEventListener("focusin", this.onfocusin);
 			document.body.appendChild(this.containerElement);
 
-			window.addEventListener("resize", x => this.resize());
+			window.addEventListener("resize", x => WindowManager.resize());
 			window.addEventListener("contextmenu", x => {
 				if (!(x.target instanceof HTMLInputElement) ||
 					x.target.classList.contains("context-menu-disabled")) {
@@ -1884,54 +1673,35 @@ namespace Uno.UI {
 		}
 
 		private removeLoading() {
-
-			if (!this.loadingElementId) {
-				return;
-			}
-
 			const element = document.getElementById(this.loadingElementId);
 			if (element) {
 				element.parentElement.removeChild(element);
 			}
-
-			// UWP Window's default background is white.
-			const body = document.getElementsByTagName("body")[0];
-			body.style.backgroundColor = "#fff";
+			
+			let bootstrapperLoaders = document.getElementsByClassName(WindowManager.unoPersistentLoaderClassName);
+			if (bootstrapperLoaders.length > 0) {
+				let bootstrapperLoader = bootstrapperLoaders[0] as HTMLElement;
+				bootstrapperLoader.parentElement.removeChild(bootstrapperLoader);
+			}
 		}
 
-		private resize() {
-
-			if (WindowManager.isHosted) {
-				UnoDispatch.resize(`${document.documentElement.clientWidth};${document.documentElement.clientHeight}`);
-			}
-			else {
-				WindowManager.resizeMethod(document.documentElement.clientWidth, document.documentElement.clientHeight);
-			}
+		private static resize() {
+			WindowManager.resizeMethod(document.documentElement.clientWidth, document.documentElement.clientHeight);
 		}
 
 		private onfocusin(event: Event) {
-			if (WindowManager.isHosted) {
-				console.warn("Focus not supported in hosted mode");
-			}
-			else {
-				const newFocus = event.target;
-				const handle = (newFocus as HTMLElement).getAttribute("XamlHandle");
-				const htmlId = handle ? Number(handle) : -1; // newFocus may not be an Uno element
-				WindowManager.focusInMethod(htmlId);
-			}
+			const newFocus = event.target;
+			const handle = (newFocus as HTMLElement).getAttribute("XamlHandle");
+			const htmlId = handle ? Number(handle) : -1; // newFocus may not be an Uno element
+			WindowManager.focusInMethod(htmlId);
 		}
 
 		private onWindowBlur() {
-			if (WindowManager.isHosted) {
-				console.warn("Focus not supported in hosted mode");
-			}
-			else {
-				// Unset managed focus when Window loses focus
-				WindowManager.focusInMethod(-1);
-			}
+			// Unset managed focus when Window loses focus
+			WindowManager.focusInMethod(-1);
 		}
 
-		private dispatchEvent(element: HTMLElement | SVGElement, eventName: string, eventPayload: string = null): HtmlEventDispatchResult {
+		private dispatchEvent(element: HTMLElement | SVGElement, eventName: string, eventPayload: string = null, onCapturePhase: boolean = false): HtmlEventDispatchResult {
 			const htmlId = Number(element.getAttribute("XamlHandle"));
 
 			// console.debug(`${element.getAttribute("id")}: Raising event ${eventName}.`);
@@ -1940,16 +1710,7 @@ namespace Uno.UI {
 				throw `No attribute XamlHandle on element ${element}. Can't raise event.`;
 			}
 
-			if (WindowManager.isHosted) {
-				// Dispatch to the C# backed UnoDispatch class. Events propagated
-				// this way always succeed because synchronous calls are not possible
-				// between the host and the browser, unlike wasm.
-				UnoDispatch.dispatch(this.handleToString(htmlId), eventName, eventPayload);
-				return HtmlEventDispatchResult.Ok;
-			}
-			else {
-				return WindowManager.dispatchEventMethod(htmlId, eventName, eventPayload || "");
-			}
+			return WindowManager.dispatchEventMethod(htmlId, eventName, eventPayload || "", onCapturePhase);
 		}
 
 		private getIsConnectedToRootElement(element: HTMLElement | SVGElement): boolean {
@@ -1976,21 +1737,15 @@ namespace Uno.UI {
 
 			if (unoBody) {
 
-				//always cleanup
-				if (this.cursorStyleElement != undefined) {
-					this.cursorStyleElement.remove();
-					this.cursorStyleElement = undefined
+				if (this.cursorStyleRule === undefined) {
+					const styleSheet = document.styleSheets[document.styleSheets.length - 1];
+
+					const ruleId = styleSheet.insertRule(".uno-buttonbase { }", styleSheet.cssRules.length);
+
+					this.cursorStyleRule = <CSSStyleRule>styleSheet.cssRules[ruleId];
 				}
 
-				//only add custom overriding style if not auto 
-				if (cssCursor != "auto") {
-
-					// this part is only to override default css:  .uno-buttonbase {cursor: pointer;}
-
-					this.cursorStyleElement = document.createElement("style");
-					this.cursorStyleElement.innerHTML = ".uno-buttonbase { cursor: " + cssCursor + "; }";
-					document.body.appendChild(this.cursorStyleElement);
-				}
+				this.cursorStyleRule.style.cursor = cssCursor !== "auto" ? cssCursor : null;
 
 				unoBody.style.cursor = cssCursor;
 			}

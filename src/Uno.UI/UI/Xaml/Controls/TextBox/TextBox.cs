@@ -1,9 +1,8 @@
-﻿#if NET461 || UNO_REFERENCE_API || __MACOS__
+﻿#if IS_UNIT_TESTS || UNO_REFERENCE_API || __MACOS__
 #pragma warning disable CS0067, CS649
 #endif
 
 using System;
-
 using Uno.Extensions;
 using Uno.UI.Common;
 using Uno.UI.DataBinding;
@@ -19,8 +18,10 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Uno.Foundation.Logging;
 using Uno.Disposables;
+using Uno.UI.Helpers;
 using Uno.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
+using Uno.UI;
 
 #if HAS_UNO_WINUI
 using Microsoft.UI.Input;
@@ -43,13 +44,21 @@ namespace Windows.UI.Xaml.Controls
 
 	public partial class TextBox : Control, IFrameworkTemplatePoolAware
 	{
+		/// <summary>
+		/// This is a workaround for the template pooling issue where we change IsChecked when the template is recycled.
+		/// This prevents incorrect event raising but is not a "real" solution. Pooling could still cause issues.
+		/// This workaround can be removed if pooling is removed. See https://github.com/unoplatform/uno/issues/12189
+		/// </summary>
+		private bool _suppressTextChanged;
+		private bool _wasTemplateRecycled;
+
 #pragma warning disable CS0067, CS0649
 		private IFrameworkElement _placeHolder;
 		private ContentControl _contentElement;
 		private WeakReference<Button> _deleteButton;
 
-		private readonly SerialDisposable _selectionHighlightColorSubscription = new SerialDisposable();
-		private readonly SerialDisposable _foregroundBrushSubscription = new SerialDisposable();
+		private Action _selectionHighlightColorChanged;
+		private Action _foregroundBrushChanged;
 #pragma warning restore CS0067, CS0649
 
 		private ContentPresenter _header;
@@ -60,6 +69,19 @@ namespace Windows.UI.Xaml.Controls
 		public event TypedEventHandler<TextBox, TextBoxTextChangingEventArgs> TextChanging;
 		public event TypedEventHandler<TextBox, TextBoxBeforeTextChangingEventArgs> BeforeTextChanging;
 		public event RoutedEventHandler SelectionChanged;
+
+#if !IS_UNIT_TESTS && !__MACOS__
+		/// <summary>
+		/// Occurs when text is pasted into the control.
+		/// </summary>
+		public
+#if __IOS__
+			new
+#endif
+			event TextControlPasteEventHandler Paste;
+
+		internal void RaisePaste(TextControlPasteEventArgs args) => Paste?.Invoke(this, args);
+#endif
 
 		/// <summary>
 		/// Set when <see cref="TextChanged"/> event is being raised, to ensure modifications by handlers don't trigger an infinite loop.
@@ -73,6 +95,10 @@ namespace Windows.UI.Xaml.Controls
 		/// Set when the <see cref="Text"/> property is being modified by user input.
 		/// </summary>
 		private bool _isInputModifyingText;
+		/// <summary>
+		/// Set when the <see cref="Text"/> property is being cleared via delete button.
+		/// </summary>
+		private bool _isInputClearingText;
 		/// <summary>
 		/// Set when <see cref="RaiseTextChanged"/> has been dispatched but not yet called.
 		/// </summary>
@@ -91,28 +117,62 @@ namespace Windows.UI.Xaml.Controls
 			DefaultStyleKey = typeof(TextBox);
 			SizeChanged += OnSizeChanged;
 
-			Loaded += TextBox_Loaded;
-			Unloaded += TextBox_Unloaded;
+#if __SKIA__
+			_timer.Tick += TimerOnTick;
+#endif
 		}
 
-		private void TextBox_Loaded(object sender, RoutedEventArgs e)
+		private bool IsSkiaTextBox =>
+#if __SKIA__
+			!FeatureConfiguration.TextBox.UseOverlayOnSkia;
+#else
+			false;
+#endif
+
+		private protected override void OnLoaded()
 		{
-			// Brush subscriptions might have been removed during Unloaded
-			if (_foregroundBrushSubscription.Disposable is null)
+			base.OnLoaded();
+
+#if __ANDROID__
+			SetupTextBoxView();
+#endif
+
+			// This workaround is added in OnLoaded rather than OnApplyTemplate.
+			// Apparently, sometimes (e.g, Material style), the TextBox style setters are executed after OnApplyTemplate
+			// So, the style setters would override what the workaround does.
+			// OnLoaded appears to be executed after both OnApplyTemplate and after the style setters, making sure the values set here are not modified after.
+			if (_contentElement is ScrollViewer scrollViewer)
 			{
-				OnForegroundColorChanged(null, Foreground);
-			}
-			if (_selectionHighlightColorSubscription.Disposable is null)
-			{
-				OnSelectionHighlightColorChanged(SelectionHighlightColor);
+#if __IOS__ || __MACOS__
+				// We disable scrolling because the inner ITextBoxView provides its own scrolling
+				scrollViewer.HorizontalScrollMode = ScrollMode.Disabled;
+				scrollViewer.VerticalScrollMode = ScrollMode.Disabled;
+				scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+				scrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+#else
+				// The template of TextBox contains the following:
+				/*
+					HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+					HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
+					VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+					VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"
+				 */
+				// Historically, TemplateBinding for attached DPs wasn't supported, and TextBox worked perfectly fine.
+				// When support for TemplateBinding for attached DPs was added, TextBox broke (test: TextBox_AutoGrow_Vertically_Wrapping_Test) because of
+				// change in the values of these properties. The following code serves as a workaround to set the values to what they used to be
+				// before the support for TemplateBinding for attached DPs.
+				if (!IsSkiaTextBox)
+				{
+					scrollViewer.HorizontalScrollMode = ScrollMode.Enabled; // The template sets this to Auto
+					scrollViewer.VerticalScrollMode = ScrollMode.Enabled; // The template sets this to Auto
+					scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; // The template sets this to Hidden
+					scrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; // The template sets this to Hidden
+				}
+#endif
 			}
 		}
 
-		private void TextBox_Unloaded(object sender, RoutedEventArgs e)
-		{
-			_foregroundBrushSubscription.Disposable = null;
-			_selectionHighlightColorSubscription.Disposable = null;
-		}
+		internal bool IsUserModifying => _isInputModifyingText || _isInputClearingText;
 
 		private void OnSizeChanged(object sender, SizeChangedEventArgs args)
 		{
@@ -133,7 +193,7 @@ namespace Windows.UI.Xaml.Controls
 			UpdateFontPartial();
 			OnHeaderChanged();
 			OnIsTextPredictionEnabledChanged(IsTextPredictionEnabled);
-			OnSelectionHighlightColorChanged(SelectionHighlightColor);
+			OnSelectionHighlightColorChanged(null, SelectionHighlightColor);
 			OnIsSpellCheckEnabledChanged(IsSpellCheckEnabled);
 			OnTextAlignmentChanged(TextAlignment);
 			OnTextWrappingChanged();
@@ -162,17 +222,6 @@ namespace Windows.UI.Xaml.Controls
 			_placeHolder = GetTemplateChild(TextBoxConstants.PlaceHolderPartName) as IFrameworkElement;
 			_contentElement = GetTemplateChild(TextBoxConstants.ContentElementPartName) as ContentControl;
 			_header = GetTemplateChild(TextBoxConstants.HeaderContentPartName) as ContentPresenter;
-
-			if (_contentElement is ScrollViewer scrollViewer)
-			{
-#if __IOS__ || __MACOS__
-				// We disable scrolling because the inner ITextBoxView provides its own scrolling
-				scrollViewer.HorizontalScrollMode = ScrollMode.Disabled;
-				scrollViewer.VerticalScrollMode = ScrollMode.Disabled;
-				scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-				scrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
-#endif
-			}
 
 			if (GetTemplateChild(TextBoxConstants.DeleteButtonPartName) is Button button)
 			{
@@ -227,14 +276,11 @@ namespace Windows.UI.Xaml.Controls
 				typeof(TextBox),
 				new FrameworkPropertyMetadata(
 					defaultValue: string.Empty,
-					options: FrameworkPropertyMetadataOptions.None,
+					options: FrameworkPropertyMetadataOptions.CoerceOnlyWhenChanged,
 					propertyChangedCallback: (s, e) => ((TextBox)s)?.OnTextChanged(e),
-					coerceValueCallback: (d, v) => ((TextBox)d)?.CoerceText(v),
+					coerceValueCallback: (d, v, _) => ((TextBox)d)?.CoerceText(v),
 					defaultUpdateSourceTrigger: UpdateSourceTrigger.Explicit
 				)
-				{
-					CoerceWhenUnchanged = false
-				}
 			);
 
 		protected virtual void OnTextChanged(DependencyPropertyChangedEventArgs e)
@@ -252,6 +298,8 @@ namespace Windows.UI.Xaml.Controls
 
 			UpdateButtonStates();
 
+			OnTextChangedPartial();
+
 			if (!_isTextChangedPending)
 			{
 				_isTextChangedPending = true;
@@ -259,20 +307,18 @@ namespace Windows.UI.Xaml.Controls
 			}
 		}
 
+		partial void OnTextChangedPartial();
+
 		private void RaiseTextChanging()
 		{
 			if (!_isInvokingTextChanging)
 			{
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 				try
-#endif
 				{
 					_isInvokingTextChanging = true;
 					TextChanging?.Invoke(this, new TextBoxTextChangingEventArgs());
 				}
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 				finally
-#endif
 				{
 					_isInvokingTextChanging = false;
 				}
@@ -292,19 +338,19 @@ namespace Windows.UI.Xaml.Controls
 				return;
 			}
 
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 			try
-#endif
 			{
 				_isInvokingTextChanged = true;
 				_isTextChangedPending = false;
-				TextChanged?.Invoke(this, new TextChangedEventArgs(this));
+				if (!_suppressTextChanged) // This workaround can be removed if pooling is removed. See https://github.com/unoplatform/uno/issues/12189
+				{
+					TextChanged?.Invoke(this, new TextChangedEventArgs(this));
+				}
 			}
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 			finally
-#endif
 			{
 				_isInvokingTextChanged = false;
+				_suppressTextChanged = false;
 			}
 		}
 
@@ -331,6 +377,10 @@ namespace Windows.UI.Xaml.Controls
 			if (!AcceptsReturn)
 			{
 				baseString = GetFirstLine(baseString);
+			}
+			else if (IsSkiaTextBox)
+			{
+				baseString = baseString.Replace("\r\n", "\r").Replace("\n", "\r");
 			}
 
 			var args = new TextBoxBeforeTextChangingEventArgs(baseString);
@@ -412,13 +462,7 @@ namespace Windows.UI.Xaml.Controls
 
 		protected override void OnForegroundColorChanged(Brush oldValue, Brush newValue)
 		{
-			_foregroundBrushSubscription.Disposable = null;
-			if (newValue is SolidColorBrush brush)
-			{
-				OnForegroundColorChangedPartial(brush);
-				_foregroundBrushSubscription.Disposable =
-					Brush.AssignAndObserveBrush(brush, c => OnForegroundColorChangedPartial(brush));
-			}
+			Brush.SetupBrushChanged(oldValue, newValue, ref _foregroundBrushChanged, () => OnForegroundColorChangedPartial(newValue));
 		}
 
 		partial void OnForegroundColorChangedPartial(Brush newValue);
@@ -462,20 +506,13 @@ namespace Windows.UI.Xaml.Controls
 				typeof(TextBox),
 				new FrameworkPropertyMetadata(
 					DefaultBrushes.SelectionHighlightColor,
-					propertyChangedCallback: (s, e) => ((TextBox)s)?.OnSelectionHighlightColorChanged((SolidColorBrush)e.NewValue)));
+					propertyChangedCallback: (s, e) => ((TextBox)s)?.OnSelectionHighlightColorChanged((SolidColorBrush)e.OldValue, (SolidColorBrush)e.NewValue)));
 
-		private void OnSelectionHighlightColorChanged(SolidColorBrush brush)
+		private void OnSelectionHighlightColorChanged(SolidColorBrush oldBrush, SolidColorBrush newBrush)
 		{
-			_selectionHighlightColorSubscription.Disposable = null;
-			if (brush is not null)
-			{
-				OnSelectionHighlightColorChangedPartial(brush);
-				_selectionHighlightColorSubscription.Disposable = Brush.AssignAndObserveBrush(brush, c => OnSelectionHighlightColorChangedPartial(brush));
-			}
-			else
-			{
-				OnSelectionHighlightColorChangedPartial(DefaultBrushes.SelectionHighlightColor);
-			}
+			oldBrush ??= DefaultBrushes.SelectionHighlightColor;
+			newBrush ??= DefaultBrushes.SelectionHighlightColor;
+			Brush.SetupBrushChanged(oldBrush, newBrush, ref _selectionHighlightColorChanged, () => OnSelectionHighlightColorChangedPartial(newBrush));
 		}
 
 		partial void OnSelectionHighlightColorChangedPartial(SolidColorBrush brush);
@@ -628,9 +665,21 @@ namespace Windows.UI.Xaml.Controls
 		partial void OnTextWrappingChangedPartial();
 
 		#endregion
+#if SUPPORTS_RTL
+		internal override void OnPropertyChanged2(DependencyPropertyChangedEventArgs args)
+		{
+			base.OnPropertyChanged2(args);
+			if (args.Property == FrameworkElement.FlowDirectionProperty)
+			{
+				OnFlowDirectionChangedPartial();
+			}
+		}
 
-#if __IOS__ || NET461 || __WASM__ || __SKIA__ || __NETSTD_REFERENCE__ || __MACOS__
-		[Uno.NotImplemented("__IOS__", "NET461", "__WASM__", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
+		partial void OnFlowDirectionChangedPartial();
+#endif
+
+#if __IOS__ || IS_UNIT_TESTS || __WASM__ || __SKIA__ || __NETSTD_REFERENCE__ || __MACOS__
+		[Uno.NotImplemented("__IOS__", "IS_UNIT_TESTS", "__WASM__", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
 #endif
 		public CharacterCasing CharacterCasing
 		{
@@ -638,8 +687,8 @@ namespace Windows.UI.Xaml.Controls
 			set => this.SetValue(CharacterCasingProperty, value);
 		}
 
-#if __IOS__ || NET461 || __WASM__ || __SKIA__ || __NETSTD_REFERENCE__ || __MACOS__
-		[Uno.NotImplemented("__IOS__", "NET461", "__WASM__", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
+#if __IOS__ || IS_UNIT_TESTS || __WASM__ || __SKIA__ || __NETSTD_REFERENCE__ || __MACOS__
+		[Uno.NotImplemented("__IOS__", "IS_UNIT_TESTS", "__WASM__", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
 #endif
 		public static DependencyProperty CharacterCasingProperty { get; } =
 			DependencyProperty.Register(
@@ -787,7 +836,7 @@ namespace Windows.UI.Xaml.Controls
 
 		#region TextAlignment DependencyProperty
 
-#if XAMARIN_ANDROID
+#if __ANDROID__
 		public new TextAlignment TextAlignment
 #else
 		public TextAlignment TextAlignment
@@ -851,9 +900,14 @@ namespace Windows.UI.Xaml.Controls
 
 			if (!initial && newValue == FocusState.Unfocused && _hasTextChangedThisFocusSession)
 			{
-				// Manually update Source when losing focus because TextProperty's default UpdateSourceTrigger is Explicit
-				var bindingExpression = GetBindingExpression(TextProperty);
-				bindingExpression?.UpdateSource(Text);
+				if (!_wasTemplateRecycled)
+				{
+					// Manually update Source when losing focus because TextProperty's default UpdateSourceTrigger is Explicit
+					var bindingExpression = GetBindingExpression(TextProperty);
+					bindingExpression?.UpdateSource(Text);
+				}
+
+				_wasTemplateRecycled = false;
 			}
 
 			UpdateButtonStates();
@@ -864,9 +918,13 @@ namespace Windows.UI.Xaml.Controls
 			}
 
 			UpdateVisualState();
+
+			OnFocusStateChangedPartial2(newValue);
 		}
 
 		partial void OnFocusStateChangedPartial(FocusState focusState);
+
+		partial void OnFocusStateChangedPartial2(FocusState focusState);
 
 		protected override void OnVisibilityChanged(Visibility oldValue, Visibility newValue)
 		{
@@ -914,7 +972,13 @@ namespace Windows.UI.Xaml.Controls
 			}
 
 			args.Handled = true;
+
+			OnPointerPressedPartial(args);
 		}
+
+		partial void OnPointerPressedPartial(PointerRoutedEventArgs args);
+
+		partial void OnPointerReleasedPartial(PointerRoutedEventArgs args);
 
 		/// <inheritdoc />
 		protected override void OnPointerReleased(PointerRoutedEventArgs args)
@@ -927,6 +991,8 @@ namespace Windows.UI.Xaml.Controls
 			}
 
 			args.Handled = true;
+
+			OnPointerReleasedPartial(args);
 		}
 
 		protected override void OnTapped(TappedRoutedEventArgs e)
@@ -939,23 +1005,60 @@ namespace Windows.UI.Xaml.Controls
 		partial void OnTappedPartial();
 
 		/// <inheritdoc />
-		protected override void OnKeyDown(KeyRoutedEventArgs args)
+		protected override void OnKeyDown(KeyRoutedEventArgs args) => OnKeyDownPartial(args);
+
+		partial void OnKeyDownPartial(KeyRoutedEventArgs args);
+
+#if !__SKIA__
+		partial void OnKeyDownPartial(KeyRoutedEventArgs args) => OnKeyDownInternal(args);
+#endif
+
+		private void OnKeyDownInternal(KeyRoutedEventArgs args)
 		{
 			base.OnKeyDown(args);
+
+
+			// On skia, sometimes SelectionStart is updated to a new value before KeyDown is fired, so
+			// we need to get selectionStart from another source on Skia.
+#if __SKIA__
+			var selectionStart = TextBoxView.SelectionBeforeKeyDown.start;
+#else
+			var selectionStart = SelectionStart;
+#endif
 
 			// Note: On windows only keys that are "moving the cursor" are handled
 			//		 AND ** only KeyDown ** is handled (not KeyUp)
 			switch (args.Key)
 			{
 				case VirtualKey.Up:
+					if (AcceptsReturn)
+					{
+						args.Handled = true;
+					}
+					break;
 				case VirtualKey.Down:
+					if (selectionStart != Text.Length)
+					{
+						SelectionStart = Text.Length;
+						args.Handled = true;
+					}
 					if (AcceptsReturn)
 					{
 						args.Handled = true;
 					}
 					break;
 				case VirtualKey.Left:
+					if (selectionStart != 0)
+					{
+						args.Handled = true;
+					}
+					break;
 				case VirtualKey.Right:
+					if (selectionStart != Text.Length)
+					{
+						args.Handled = true;
+					}
+					break;
 				case VirtualKey.Home:
 				case VirtualKey.End:
 					args.Handled = true;
@@ -965,10 +1068,9 @@ namespace Windows.UI.Xaml.Controls
 #if __WASM__
 			if (args.Handled)
 			{
-				// Marking the routed event as Handled makes the browser call
-				// preventDefault() for key events. This is a problem as it
-				// breaks the browser caret navigation within the input.
-				((IPreventDefaultHandling)args).DoNotPreventDefault = true;
+				// Marking the routed event as Handled makes the browser call preventDefault() for key events.
+				// This is a problem as it breaks the browser caret navigation within the input.
+				((IHtmlHandleableRoutedEventArgs)args).HandledResult &= ~HtmlEventDispatchResult.PreventDefault;
 			}
 #endif
 		}
@@ -998,16 +1100,12 @@ namespace Windows.UI.Xaml.Controls
 		/// <returns>The value of the <see cref="Text"/> property, which may have been modified programmatically.</returns>
 		internal string ProcessTextInput(string newText)
 		{
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 			try
-#endif
 			{
 				_isInputModifyingText = true;
 				Text = newText;
 			}
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 			finally
-#endif
 			{
 				_isInputModifyingText = false;
 			}
@@ -1017,8 +1115,17 @@ namespace Windows.UI.Xaml.Controls
 
 		private void DeleteButtonClick()
 		{
-			Text = string.Empty;
-			OnDeleteButtonClickPartial();
+			try
+			{
+				_isInputClearingText = true;
+
+				Text = string.Empty;
+				OnDeleteButtonClickPartial();
+			}
+			finally
+			{
+				_isInputClearingText = false;
+			}
 		}
 
 		partial void OnDeleteButtonClickPartial();
@@ -1028,10 +1135,11 @@ namespace Windows.UI.Xaml.Controls
 			SelectionChanged?.Invoke(this, new RoutedEventArgs(this));
 		}
 
-
 		public void OnTemplateRecycled()
 		{
+			_suppressTextChanged = true;
 			Text = string.Empty;
+			_wasTemplateRecycled = true;
 		}
 
 		protected override AutomationPeer OnCreateAutomationPeer() => new TextBoxAutomationPeer(this);
@@ -1118,9 +1226,13 @@ namespace Windows.UI.Xaml.Controls
 
 				currentText = currentText.Insert(selectionStart, clipboardText);
 
+				PasteFromClipboardPartial(clipboardText, selectionStart, selectionLength, currentText);
+
 				Text = currentText;
 			});
 		}
+
+		partial void PasteFromClipboardPartial(string clipboardText, int selectionStart, int selectionLength, string newText);
 
 		/// <summary>
 		/// Copies the selected content to the OS clipboard.
@@ -1142,8 +1254,11 @@ namespace Windows.UI.Xaml.Controls
 		public void CutSelectionToClipboard()
 		{
 			CopySelectionToClipboard();
+			CutSelectionToClipboardPartial();
 			Text = Text.Remove(SelectionStart, SelectionLength);
 		}
+
+		partial void CutSelectionToClipboardPartial();
 
 		internal override bool CanHaveChildren() => true;
 

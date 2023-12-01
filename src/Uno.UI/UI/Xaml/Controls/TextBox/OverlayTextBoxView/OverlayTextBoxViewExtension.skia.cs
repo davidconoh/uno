@@ -15,6 +15,7 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 	private readonly TextBoxView _owner;
 	private readonly Func<TextBox, IOverlayTextBoxView> _textBoxViewFactory;
 	private readonly SerialDisposable _textChangedDisposable = new SerialDisposable();
+	private readonly SerialDisposable _pasteDisposable = new SerialDisposable();
 
 	private ContentControl? _contentElement;
 	private IOverlayTextBoxView? _textBoxView;
@@ -45,6 +46,7 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 
 		EnsureTextBoxView(textBox);
 		ObserveNativeTextChanges();
+		ObserveNativePaste();
 		_lastSize = new Size(-1, -1);
 		_lastPosition = new Point(-1, -1);
 		UpdateNativeView();
@@ -52,6 +54,7 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 
 		_textBoxView!.AddToTextInputLayer(xamlRoot);
 		InvalidateLayout();
+
 		SetPasswordRevealState(_currentPasswordRevealState);
 
 		_textBoxView.SetFocus();
@@ -74,6 +77,7 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 	public void EndEntry()
 	{
 		_textChangedDisposable.Disposable = null;
+		_pasteDisposable.Disposable = null;
 		if (_textBoxView is null ||
 			!_textBoxView.IsDisplayed)
 		{
@@ -152,7 +156,9 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 
 		var transformToRoot = _contentElement.TransformToVisual(Windows.UI.Xaml.Window.Current.Content);
 		var point = transformToRoot.TransformPoint(new Point(_contentElement.Padding.Left, _contentElement.Padding.Top));
-		var pointX = (int)point.X;
+		var pointX = _owner?.TextBox?.FlowDirection is FlowDirection.RightToLeft
+			? (int)(point.X - _contentElement.RenderSize.Width)
+			: (int)point.X;
 		var pointY = (int)point.Y;
 
 		if (_lastPosition.X != pointX || _lastPosition.Y != pointY)
@@ -164,8 +170,11 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 
 	public void SetPasswordRevealState(PasswordRevealState revealState)
 	{
-		_textBoxView?.SetPasswordRevealState(revealState);
-		_currentPasswordRevealState = revealState;
+		if (_owner.TextBox is PasswordBox)
+		{
+			_textBoxView?.SetPasswordRevealState(revealState);
+			_currentPasswordRevealState = revealState;
+		}
 	}
 
 	public void Select(int start, int length)
@@ -212,6 +221,11 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 			_selectionLengthCache ?? 0 :
 			_textBoxView?.Selection.length ?? 0;
 	}
+
+	public int GetSelectionStartBeforeKeyDown() => _textBoxView!.SelectionBeforeKeyDown.start;
+
+	public int GetSelectionLengthBeforeKeyDown() => _textBoxView!.SelectionBeforeKeyDown.length;
+
 	private void EnsureTextBoxView(TextBox textBox)
 	{
 		if (_textBoxView is null ||
@@ -235,6 +249,18 @@ internal abstract class OverlayTextBoxViewExtension : IOverlayTextBoxViewExtensi
 			_textChangedDisposable.Disposable = _textBoxView.ObserveTextChanges(NativeTextChanged);
 		}
 	}
+
+	private void ObserveNativePaste()
+	{
+		_pasteDisposable.Disposable = null;
+		if (_textBoxView is not null)
+		{
+			_textBoxView.Paste += NativePaste;
+			_pasteDisposable.Disposable = Disposable.Create(() => _textBoxView.Paste -= NativePaste);
+		}
+	}
+
+	private void NativePaste(object sender, TextControlPasteEventArgs e) => _owner.TextBox?.RaisePaste(e);
 
 	private void NativeTextChanged(object? sender, EventArgs e)
 	{

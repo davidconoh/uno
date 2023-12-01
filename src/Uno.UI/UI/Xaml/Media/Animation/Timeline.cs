@@ -297,6 +297,11 @@ namespace Windows.UI.Xaml.Media.Animation
 			PropertyInfo.Value = value;
 		}
 
+		internal void SetAnimationFillingValue(object value)
+		{
+			PropertyInfo.SetAnimationFillingValue(value);
+		}
+
 		/// <summary>
 		/// Clears the animated value of the dependency property value precedence system
 		/// </summary>
@@ -308,6 +313,11 @@ namespace Windows.UI.Xaml.Media.Animation
 			}
 
 			PropertyInfo.ClearValue();
+		}
+
+		internal void ClearAnimationFillingValue()
+		{
+			PropertyInfo.ClearAnimationFillingValue();
 		}
 
 		void ITimeline.Begin()
@@ -404,12 +414,12 @@ namespace Windows.UI.Xaml.Media.Animation
 			return true;
 		}
 
-		protected virtual void Dispose(bool disposing)
+		private protected virtual void Dispose(bool disposing)
 		{
 			Target = null;
 		}
 
-		public void Dispose()
+		internal void Dispose()
 		{
 			Dispose(true);
 			GC.SuppressFinalize(this);
@@ -421,7 +431,7 @@ namespace Windows.UI.Xaml.Media.Animation
 
 		~Timeline()
 		{
-			Dispose(false);
+			_ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => Dispose(false));
 		}
 	}
 }

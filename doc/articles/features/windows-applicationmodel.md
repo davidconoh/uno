@@ -1,4 +1,13 @@
-# Uno Support for Windows.ApplicationModel
+---
+uid: Uno.Features.WAM
+---
+
+# Windows ApplicationModel
+
+> [!TIP]
+> This article covers Uno-specific information for ApplicationModel. For a full description of the feature and instructions on using it, consult the UWP documentation: https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel
+
+* The `Windows.ApplicationModel.PackageId` class allows retrieving information about the application package.
 
 ## `PackageId`
 

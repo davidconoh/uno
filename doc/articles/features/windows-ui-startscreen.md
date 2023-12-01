@@ -1,4 +1,13 @@
-# Uno Support for Windows.UI.StartScreen
+---
+uid: Uno.Features.WinUIStartScreen
+---
+
+# Start Screen
+
+> [!TIP]
+> This article covers Uno-specific information for `Windows.UI.StartScreen` namespace. For a full description of the feature and instructions on using it, consult the UWP documentation: https://learn.microsoft.com/en-us/uwp/api/windows.ui.startscreen
+
+* The `Windows.UI.StartScreen` namespace provides classes for creating and managing app jump lists.
 
 ## `JumpList` &amp; `JumpListItem`
 

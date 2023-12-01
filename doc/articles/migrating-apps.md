@@ -1,3 +1,7 @@
+---
+uid: Uno.Development.MigratingApps
+---
+
 # Migrating a UWP-only application codebase to an Uno Platform application
 
 This article describes how to migrate a C# and XAML application targeting only UWP to one targeting multiple platforms using Uno Platform. The final application codebase will share 99% of the same code with the original, but the solution structure will be different.
@@ -8,7 +12,7 @@ After you've migrated the files and dependencies, the general [migration guidanc
 
 ## Prerequisites
 
-Follow the instructions to [set up your development environment for Uno Platform with Visual Studio for Windows](get-started-vs.md). You can also use another IDE such as [VS Code](get-started-vscode.md), however some steps may be slightly different.
+Follow the instructions to [set up your development environment for Uno Platform with Visual Studio for Windows](xref:Uno.GetStarted.vs2022). You can also use another IDE such as [VS Code](xref:Uno.GetStarted.vscode), however some steps may be slightly different.
 
 ## Migrating files to the Uno solution structure
 

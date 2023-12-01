@@ -44,7 +44,8 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
 {
 	[TestClass]
 	[RequiresFullWindow]
-	public class NavigationViewTests : MUXApiTestBase
+	[RunsOnUIThread]
+	public partial class NavigationViewTests : MUXApiTestBase
 	{
 		private NavigationView SetupNavigationView(NavigationViewPaneDisplayMode paneDisplayMode = NavigationViewPaneDisplayMode.Auto, bool wrapInScrollViewer = false)
 		{
@@ -1255,6 +1256,9 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
 #if __MACOS__
 		[Ignore("Currently fails on macOS, part of #9282 epic")]
 #endif
+#if __ANDROID__
+		[Ignore("Currently fails on Android https://github.com/unoplatform/uno/issues/9080")]
+#endif
 		public async Task VerifyNavigationViewItemToolTipPaneDisplayMode()
 		{
 			if (!PlatformConfiguration.IsOsVersionGreaterThanOrEqual(OSVersion.Redstone5))
@@ -1327,6 +1331,38 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
 					Verify.AreEqual(expectedDefaultToolTip, ToolTipService.GetToolTip(menuItem1), $"Item 1's tooltip should have been \"{expectedDefaultToolTip ?? "null"}\".");
 					Verify.AreEqual(expectedCustomToolTip, ToolTipService.GetToolTip(menuItem2), $"Item 2's tooltip should have been {expectedCustomToolTip}.");
 				}
+			});
+		}
+
+		[TestMethod]
+		public void VerifyNVIOutlivingNVDoesNotCrash()
+		{
+			NavigationViewItem menuItem1 = null;
+			RunOnUIThread.Execute(() =>
+			{
+				var navView = new NavigationView();
+				menuItem1 = new NavigationViewItem();
+				navView.MenuItems.Add(menuItem1);
+				Content = navView;
+				Content.UpdateLayout();
+				navView.MenuItems.Clear();
+				Content = menuItem1;
+				Content.UpdateLayout();
+			});
+
+			IdleSynchronizer.Wait();
+
+			RunOnUIThread.Execute(() =>
+			{
+				GC.Collect();
+			});
+
+			IdleSynchronizer.Wait();
+
+			RunOnUIThread.Execute(() =>
+			{
+				// NavigationView has a handler on NVI's IsSelected DependencyPropertyChangedEvent.
+				menuItem1.IsSelected = !menuItem1.IsSelected;
 			});
 		}
 	}

@@ -13,6 +13,8 @@ using CoreGraphics;
 using _View = AppKit.NSView;
 #elif __ANDROID__
 using Android.Views;
+#elif __WASM__
+using Uno.UI.Xaml;
 #endif
 
 
@@ -22,7 +24,7 @@ namespace Uno.UI.Toolkit
 	[TemplatePart(Name = "PART_Border", Type = typeof(Border))]
 	[TemplatePart(Name = "PART_ShadowHost", Type = typeof(Grid))]
 	public sealed partial class ElevatedView : Control
-#if HAS_UNO
+#if HAS_UNO && !__CROSSRUNTIME__ && !IS_UNIT_TESTS
 		, ICustomClippingElement
 #endif
 	{
@@ -133,22 +135,9 @@ namespace Uno.UI.Toolkit
 			set => SetValue(BackgroundProperty, value);
 		}
 
-		public new static DependencyProperty CornerRadiusProperty { get; } = DependencyProperty.Register(
-			"CornerRadius",
-			typeof(CornerRadius),
-			typeof(ElevatedView),
-#if __IOS__ || __MACOS__
-			new FrameworkPropertyMetadata(default(CornerRadius))
-#else
-			new FrameworkPropertyMetadata(default(CornerRadius), OnChanged)
+#if !__IOS__ && !__MACOS__
+		private protected override void OnCornerRadiousChanged(DependencyPropertyChangedEventArgs args) => OnChanged(this, args);
 #endif
-		);
-
-		public new CornerRadius CornerRadius
-		{
-			get => (CornerRadius)GetValue(CornerRadiusProperty);
-			set => SetValue(CornerRadiusProperty, value);
-		}
 
 		protected internal override void OnTemplatedParentChanged(DependencyPropertyChangedEventArgs e)
 		{
@@ -191,7 +180,11 @@ namespace Uno.UI.Toolkit
 			{
 #if __WASM__
 				this.SetElevationInternal(Elevation, ShadowColor);
-				this.SetCornerRadius(CornerRadius);
+				// We don't pass BorderThickness here to avoid "double" border being created. The BorderThickness will flow through ElevatedView template to PART_Border
+				// Note that this line was necessary as of writing it even though we pass zero for BorderThickness. Setting the CornerRadius alone has a noticeable effect.
+				// and not setting CornerRadius properly results in wrong rendering.
+				// Note that the brush will not be used if we pass zero thickness, so we pass null instead of wasting time reading the dependency property.
+				this.SetBorder(default, null, CornerRadius);
 #elif __IOS__ || __MACOS__
 				this.SetElevationInternal(Elevation, ShadowColor, _border.BoundsPath);
 #elif __ANDROID__
@@ -205,7 +198,7 @@ namespace Uno.UI.Toolkit
 			}
 		}
 
-#if HAS_UNO
+#if HAS_UNO && !__CROSSRUNTIME__ && !IS_UNIT_TESTS
 		bool ICustomClippingElement.AllowClippingToLayoutSlot => false; // Never clip, since it will remove the shadow
 
 		bool ICustomClippingElement.ForceClippingToLayoutSlot => false;
